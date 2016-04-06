@@ -1,0 +1,3284 @@
+{
+    "swagger": "2.0",
+    "info": {
+        "description": "# Description des API prestations\n\n## Modèle de ressources\n<img src=\"https://docs.google.com/drawings/u/0/d/1H6WV7owLt3ivdq41Wl20MyBY5i1aeIJ9W82Ii4pBam4/export/png?id=1H6WV7owLt3ivdq41Wl20MyBY5i1aeIJ9W82Ii4pBam4&pageid=p\"> source image : http://bit.ly/prestations_modele_donnees_light\n## TODO\n* revoir le modèle\n* revoir les noms des attributs pour garder un cohérence avec les autres SI\n* revoir la liste des fonctionnalités métier et les API associées\n* liaison avec le legacy (coclico, traceo, FS+,...)\n* comment est géré le référentiel des tournées des prestations\n* Liaisons avec les autres SI\n## Volumétrie et performances (hypothèses à challenger par le métier)\n* 20 000 000 prestations par an\n* 2 000 000 prestations par mois max\n* 400 000 prestations max par campagne\n* 200 Commanditaires (clients)\n* 1 000 campagnes par an\n* 3 000 GCP (utilisateurs pilotant l'activité des prestations)\n* Temps de réponse des interface <3 sec\n* Temps d'intégration des fichiers de campagne < 20 minutes\n\n## Fonctionnalités\n\nLes fonctionnalités de création/modification de campagne PEUVENT être réalisés par le client ou par le commercial Poste\n\n    GET/POST/PUT/DELETE /prestations/v1/campagnes\n\n\nLe client (commanditaire) PEUT fournir une liste de prestations par WS ou par fichier (ex fichier csv au format zip) (400 000 lignes)\n  Proposition de fichier : https://docs.google.com/spreadsheets/d/1EUuV7DoOxqNSt5nxjvtuOoxFmT2oI9nKSqPLtJj2DsA/edit?usp=sharing\n\n    POST /prestations/v1/prestations (si unitaire, voir d'autres services pour import en masse)\n    POST /prestations/v1/prestations/importer_fichier (si import en masse)\n\nLe fichier de prestation du client DOIT être validé par une qualification des adresses, les adresses non validées ne pourront pas faire l'objet d'une prestation\n\n    GET /prestations/v1/prestations?statut_adresse=a_verifier,validee_corrigee,validee,invalide,inexistante\n    PATCH/POST /prestations/v1/prestations/idpre234567\n\nLa validation des adresses DOIT être réalisée en un temps maitrisé (20 min pour 1 000 000 adresses)\nUne affectation automatique des prestations à des sites/tournées DOIT être réalisée (à partir de l'adresse)\n\n    GET /prestations/v1/prestations/id_tournees=EMPTY\n    PATCH/POST /prestations/v1/prestations/idpre234567\n\nLe client PEUT consulter ses campagnes/prestations\n\n    GET /prestations/v1/campagnes?ref_commanditaire=campagne_carrefour_001\n    GET /prestations/v1/prestations?id_campagnes=12345\n\nLe client PEUT voir les prestations erronées (adresse non validées par correcteur d'adresse)\n\n    GET /prestations/v1/prestations?id_campagnes=12345&statut=adresse_erronee,adresse_inconnue\n\nLe client PEUT corriger ses adresses de prestation lorsqu'elle sont erronées ou non prises en compte/rejetées par le redressement d'adresse\n\n    POST/PATCH /prestations/v1/prestations/idp1234567abec\n\nLe client PEUT annuler une campagne non lancée, il doit pouvoir annuler des prestations planifiées 24H avant\n\n    GET /prestations/v1/campagnes/idcamp4567abec\n    POST/PATCH /prestations/v1/campagnes/idcamp4567abec {'statut':'annulee'}\n    ou\n    POST /prestations/v1/campagnes/idcamp4567abec/annuler\n\nIl doit y avoir une notion de campagne avec une date de début et de fin, le facteur/GCP peut décaler une date de réalisation seulement dans la durée de la campagne\n\n     GET /prestations/v1/prestations/idpre4567abec?fields=id,date_debut_campagne,date_fin_campagne\n     POST/PATCH /prestations/v1/prestations/idpre4567abec {'date_planification':'2016-06-18T10:00:00Z'}\n     POST /prestations/v1/prestations_evenements {\"id_prestations\":\"idprabe469acdb35\",\"id_utilisateurs\":\"pwyh295\",\"detail\":\"Replanification par le mobile\",\"type\":\"replanification_mobile\"}\n\n\nLe module prestation doit affecter la prestation à un site?, à une tournée (automatiquement) via RZP\n\n      POST/PATCH /prestations/v1/prestations/idpre4567abec {'id_tournees':'123456'}\n      GET /prestations/v1/tournees?id_etablissements=787120\n\n\nLe GCP PEUT consulter les campagnes\n\n    GET /prestations/v1/campagnes?....\n\n\nLe GCP PEUT consulter les prestations\n\n    GET /prestations/v1/prestations?....\n\n\nLe GCP PEUT connaitre les prestations qui ne sont pas réalisées\n\n  GET /prestations/v1/prestations?statut=non_realisee,a_realiser&date_planification_gte=now/d,...\n\n\nLe GCP PEUT réaffecter en masse (>1 000 000) des prestations aux tournées\n\nLe GCP PEUT réaffecter en masse (>1 000 000) des prestations à une autre date\n\nLe GCP PEUT réaffecter en masse à l'établissement  une liste de prestations\n\nLe GCP PEUT consulter à la tournée, au facteur, site et national, par client, campagne  les statistiques des prestations\n\nLe GCP PEUT consulter à la tournée, au facteur, site et national, par client, campagne les non réponses et les raisons\n\nLe facteur DOIT récupérer les prestations à réaliser pour une date et une tournée\n\nLe facteur PEUT décaler une date de prestation\n\nLe service client PEUT changer la date de prestation\n\nLe GCP PEUTchanger la date de prestation\n\nLe mobile DOIT envoyer l'état de la prestation et la réponse à la prestation\n\n# Routes\n\n\n  ```\n  GET prestations/v1/prestations\n  GET prestations/v1/prestations/search?q=\n  GET prestations/v1/prestations/:id\n  POST prestations/v1/prestations\n  POST prestations/v1/prestations/:id\n  PATCH prestations/v1/prestations/:id\n  PUT prestations/v1/prestations/:id\n  DELETE prestations/v1/prestations/:id\n  ```\n\n  ```\n  GET prestations/v1/campagnes\n  GET prestations/v1/campagnes/search?q=\n  GET prestations/v1/campagnes/:id\n  POST prestations/v1/campagnes\n  POST prestations/v1/campagnes/:id\n  PATCH prestations/v1/campagnes/:id\n  PUT prestations/v1/campagnes/:id\n  DELETE prestations/v1/campagnes/:id\n  ```\n\n  ```\n  GET prestations/v1/tournees\n  GET prestations/v1/tournees/search?q=\n  GET prestations/v1/tournees/:id\n  POST prestations/v1/tournees\n  POST prestations/v1/tournees/:id\n  PATCH prestations/v1/tournees/:id\n  PUT prestations/v1/tournees/:id\n  DELETE prestations/v1/tournees/:id\n  ```\n\n  ```\n  GET prestations/v1/commanditaires\n  GET prestations/v1/commanditaires/search?q=\n  GET prestations/v1/commanditaires/:id\n  POST prestations/v1/commanditaires\n  POST prestations/v1/commanditaires/:id\n  PATCH prestations/v1/commanditaires/:id\n  PUT prestations/v1/commanditaires/:id\n  DELETE prestations/v1/commanditaires/:id\n  ```\n\n# SubRoutes\n\nLes ressources sont reliées entre elles via les identifiants, des sous routes peuvent évetuellement être créées pour faciliter la compréhension des API\n\n  ```\n  GET prestations/v1/campagnes/:id/_prestations // retourne les prestations de la campagne :id\n  GET prestations/v1/tournees/:id/_prestations // retourne les prestations de la tournees :id\n\n  ```\n\n# Données partielles\n\nLe champs fields permet de ne récupérer que les données nécessaires au client et permet de diminuer les flux réseaux et d'améliorer les performances et de ne travailler que sur cdes données utiles\n\n\n  ```\n  GET prestations/v1/prestations?fields=id,statut\n  ```\n\n\n# Filtres\n\n\n  ```\n  GET prestations/v1/prestations?statut_prestation=fait_ok,refus_destinataire&id_commanditaires=1234\n  GET prestations/v1/prestations?id_commanditaires=1234&ref_commanditaire_prestations=campagne_carrefour_campagne001_Client2345\n\n  ```\n\n# Pagination\n\nAdd start_index and/or count (pagination and total_results will be included in response with next and previous link)\n\n\n  ```\n  GET prestations/v1/prestations?start_index=20\n  GET prestations/v1/prestations?start_index=20&count=3\n  {\n    \"data\":[...],\n    \"paging\": {\n      \"total_results\":30,\n      \"prev\": \"http://localhost:1337/prestations/v1/prestations?start_index=17&count=3\",\n      \"next\": \"http://localhost:1337/prestations/v1/prestations?start_index=23&count=3\",\n    }\n  }\n\n  ```\n\n\n\n# Opérateurs\n\nAjouter les suffixe _gte, _gt, _lte, _lt pour ajouter des critères de filtres sur les dates et numériques\n\n\n  ```\n  GET prestations/v1/prestations?creation_date_gte=now-1d/d\n  GET prestations/v1/prestations?creation_date_gte=now-1d\n  GET prestations/v1/prestations?creation_date_gte=2014-06-18T23:59:59Z\n  GET prestations/v1/prestations?modification_date_gte=2014-06-18T23:59:59Z\n  ```\n\n\nSi besoin envisager d'autres critères _ne, _exists=true  _like  _prefix  _regex  _fuzzy  /search?q=\n\n# Dates\n\ncreation_date et modification_date sont gérés systèmatiquement et automatiquement par les API, ces champs permettent de faciliter les synchronisations de référentiels, les dates sont au format RFC3369\n\n\n  ```\n  Ex 2014-06-18T23:59:59Z\n  ```\n\n\nDes dates au format textuel peuvent être utilisées now, now-1d, now+1d/d,... dans les critères de filtre (see elastic.co)\n\n  ```\n  GET prestations/v1/prestations?creation_date_gte=now-1d\n  ```\n\n\n\n# Etag\n\nToutes les ressources renvient des etag qui correspondentau versions de la ressource, cela permet d'améliorer les performance en réalisant du cache et de garantir l'intégrité des donénes en cas de modification\n\n\n  ```\n  GET prestations/v1/prestations/1\n  ```\n\n\n--> renvoie un etag header et un etag dans la ressource\n\nyou can use header If-None-Matchà récupérer data only if modified, to modify data only if not modified",
+        "version": "v1",
+        "title": "API Prestations",
+        "termsOfService": "https://wiki.collaboratif-courrier.fr/confluence/display/APEX/",
+        "contact": {
+            "name": "--# your name and email --",
+            "email": "your_email@yourdomain.com"
+        }
+    },
+    "host": "localhost:1337",
+    "basePath": "/prestations/v1",
+    "securityDefinitions": {
+        "Bearer": {
+            "type": "apiKey",
+            "name": "Authorization",
+            "in": "header"
+        }
+    },
+    "tags": [
+        {
+            "name": "prestations",
+            "description": "API services des prestations"
+        },
+        {
+            "name": "campagnes",
+            "description": "APi services des campagnes de prestation"
+        },
+        {
+            "name": "tournees",
+            "description": "APi services des tournees"
+        },
+        {
+            "name": "prestations_evenements",
+            "description": "APi services des prestations_evenements"
+        }
+    ],
+    "schemes": [
+        "http"
+    ],
+    "paths": {
+        "/prestations": {
+            "get": {
+                "tags": [
+                    "prestations"
+                ],
+                "summary": "Récupère une liste de ressource prestations",
+                "description": "\n\nRécupérer prestations avec différents critères de recherche, pagination et des filtres sur les attributs.\n\nExemple avec des critères de pagination (count, start_index)\n\n\n  ```\n  curl -iX GET \\\n  -H 'Accept: application/json' \\\n  -H 'Authorization: eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJodHRwczovL2NsYXVkZS1pZHAubGFwb3N0ZS5mciIsInBybiI6ImNsYXVkZS5zZWd1cmV0QGxhcG9zdGUuZnIiLCJhdWQiOiJodHRwczovL2NsYXVkZS1hdXRoLmxhcG9zdGUuZnIiLCJleHAiOiIxNDYxNTYxNzIxIiwic2NvcGVzIjpbInJlc3NvdXJjZXMucmVhZCIsInJlc3NvdXJjZXMud3JpdGUiXX0.rn6BGkwXv1bqaevBuroqNoBDP6d8dNo3dN1f6kwPqNU' \\\n  \"http://localhost:1337/prestations/v1/prestations?start_index=1&count=10\"\n  ```\n\nExemple avec des critères de date\n\n\n  ```\n  curl -iX GET \\\n  -H 'Accept: application/json' \\\n  -H 'Authorization: eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJodHRwczovL2NsYXVkZS1pZHAubGFwb3N0ZS5mciIsInBybiI6ImNsYXVkZS5zZWd1cmV0QGxhcG9zdGUuZnIiLCJhdWQiOiJodHRwczovL2NsYXVkZS1hdXRoLmxhcG9zdGUuZnIiLCJleHAiOiIxNDYxNTYxNzIxIiwic2NvcGVzIjpbInJlc3NvdXJjZXMucmVhZCIsInJlc3NvdXJjZXMud3JpdGUiXX0.rn6BGkwXv1bqaevBuroqNoBDP6d8dNo3dN1f6kwPqNU' \\\n  \"http://localhost:1337/prestations/v1/prestations?creation_date_gte=2015-06-18T00:00:00Z\"\n  ```\n\nExemple avec des filtres sur les attributs retournés\n\n\n  ```\n  curl -iX GET \\\n  -H 'Accept: application/json' \\\n  -H 'Authorization: eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJodHRwczovL2NsYXVkZS1pZHAubGFwb3N0ZS5mciIsInBybiI6ImNsYXVkZS5zZWd1cmV0QGxhcG9zdGUuZnIiLCJhdWQiOiJodHRwczovL2NsYXVkZS1hdXRoLmxhcG9zdGUuZnIiLCJleHAiOiIxNDYxNTYxNzIxIiwic2NvcGVzIjpbInJlc3NvdXJjZXMucmVhZCIsInJlc3NvdXJjZXMud3JpdGUiXX0.rn6BGkwXv1bqaevBuroqNoBDP6d8dNo3dN1f6kwPqNU' \\\n  \"http://localhost:1337/prestations/v1/prestations?creation_date_gte=2015-06-18T00:00:00Z&fields=id,modification_date\"\n  ```\n",
+                "operationId": "listPrestations",
+                "produces": [
+                    "application/json"
+                ],
+                "parameters": [
+                    {
+                        "in": "query",
+                        "name": "fields",
+                        "description": "Listes des attributs à retourner (séparés par des virgules) Ex ?fields=id,creation_date\n",
+                        "required": false,
+                        "type": "string"
+                    },
+                    {
+                        "in": "query",
+                        "name": "start_index",
+                        "description": "Premier élément à retourner (commence à 1)",
+                        "required": false,
+                        "type": "integer",
+                        "format": "int64"
+                    },
+                    {
+                        "in": "query",
+                        "name": "count",
+                        "description": "Nombre d'éléments à retourner (par défaut 30, max 1000)",
+                        "maximum": 1000,
+                        "required": false,
+                        "type": "integer",
+                        "format": "int64"
+                    },
+                    {
+                        "in": "header",
+                        "name": "If-None-Match",
+                        "description": "Version de la ressource (voir etag) (Ex : 1)",
+                        "required": false,
+                        "type": "string"
+                    }
+                ],
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "successful operation",
+                        "schema": {
+                            "$ref": "#/definitions/PaginationPrestations"
+                        }
+                    },
+                    "304": {
+                        "description": "not modified"
+                    },
+                    "400": {
+                        "description": "Bad request, parameters are not correct",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/Error"
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized, the authentification is invalid or missing"
+                    },
+                    "403": {
+                        "description": "Forbidden, permissions are insufficient"
+                    },
+                    "429": {
+                        "description": "Too many requests"
+                    },
+                    "500": {
+                        "description": "Internal server error"
+                    },
+                    "503": {
+                        "description": "Temporary unavailable",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/Error"
+                            }
+                        }
+                    }
+                }
+            },
+            "post": {
+                "tags": [
+                    "prestations"
+                ],
+                "summary": "Crée une ressource prestations",
+                "description": "Crée une ressource prestations\n\n\n  ```\n  curl -iX POST \\\n  -H 'Accept: application/json' \\\n  -H 'Content-Type: application/json; charset=utf-8' \\\n  -H 'Authorization: eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJodHRwczovL2NsYXVkZS1pZHAubGFwb3N0ZS5mciIsInBybiI6ImNsYXVkZS5zZWd1cmV0QGxhcG9zdGUuZnIiLCJhdWQiOiJodHRwczovL2NsYXVkZS1hdXRoLmxhcG9zdGUuZnIiLCJleHAiOiIxNDYxNTYxNzIxIiwic2NvcGVzIjpbInJlc3NvdXJjZXMucmVhZCIsInJlc3NvdXJjZXMud3JpdGUiXX0.rn6BGkwXv1bqaevBuroqNoBDP6d8dNo3dN1f6kwPqNU' \\\n  -d '{\"id_prestations\":\"idpr745367457c02b\",\"nom_tournee\":\"TP-0001\",\"id_commanditaires\":\"123456\",\"id_campagnes\":\"idca123456\",\"ref_commanditaire_prestations\":\"campagne123-client3456\",\"date_modification\":\"2014-06-18T23:59:59Z\",\"date_creation\":\"2014-06-18T23:59:59Z\",\"nom_destinataire\":\"Alain Seguret\",\"adresse_destinataire_ligne2\":\"21 rue du 19 janvier\",\"adresse_destinataire_ligne3\":\"Les peupliers\",\"adresse_destinataire_ligne4\":\"\",\"adresse_destinataire_ligne5\":\"\",\"adresse_destinataire_ligne6\":\"92380 garches\",\"adresse_destinataire_ligne7\":\"France\",\"geolocalisation\":\"[-0.243148,44.945496]\",\"statut_adresse\":\"validee\",\"indication_acces_adresse\":\"digicode 12345\",\"information_complementaires\":\"\",\"type_prestation\":\"proxy-data\",\"date_debut_campagne\":\"2014-06-01T00:00:00Z\",\"date_fin_campagne\":\"2014-06-31T23:59:59Z\",\"date_planification\":\"2014-06-18T23:59:59Z\",\"statut_prestation\":\"a_faire\",\"complement_statut\":\"client_absent\",\"date_premier_passage\":\"2014-06-18T23:59:59Z\",\"date_replanification\":\"2014-06-18T23:59:59Z\",\"date_realisation\":\"2014-06-18T23:59:59Z\",\"id_tournees\":\"idtoac597bde356\",\"id_agents\":\"wyh254\",\"commentaire_libre\":\"Le client a demandé des informations complementaires, il est interessé par d'autres produits\",\"creation_date\":\"2016-03-18T06:18:14Z\",\"modification_date\":\"2016-03-18T06:18:14Z\",\"etag\":1}' \\\n  'http://localhost:1337/prestations/v1/prestations'\n  ```\n",
+                "operationId": "createPrestations",
+                "consumes": [
+                    "application/x-www-form-urlencoded"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ],
+                "parameters": [
+                    {
+                        "in": "body",
+                        "name": "body",
+                        "description": "ressource prestations",
+                        "required": false,
+                        "schema": {
+                            "$ref": "#/definitions/Prestations"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/Prestations"
+                        }
+                    },
+                    "304": {
+                        "description": "not modified"
+                    },
+                    "400": {
+                        "description": "Bad request, parameters are not correct",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/Error"
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized, the authentification is invalid or missing"
+                    },
+                    "403": {
+                        "description": "Forbidden, permissions are insufficient"
+                    },
+                    "404": {
+                        "description": "Not found"
+                    },
+                    "412": {
+                        "description": "Precondition failed, versions conflit"
+                    },
+                    "429": {
+                        "description": "Too many requests"
+                    },
+                    "500": {
+                        "description": "Internal server error"
+                    },
+                    "503": {
+                        "description": "Temporary unavailable",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/Error"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/prestations/{id}": {
+            "get": {
+                "tags": [
+                    "prestations"
+                ],
+                "summary": "Récupère une ressource prestations",
+                "description": "\nRécupère la ressourceprestations `xafaro028EywThtEpe` avec des filtres sur les attributs\n\n  ```\n  curl -iX GET \\\n  -H 'Accept: application/json' \\\n  -H 'Authorization: eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJodHRwczovL2NsYXVkZS1pZHAubGFwb3N0ZS5mciIsInBybiI6ImNsYXVkZS5zZWd1cmV0QGxhcG9zdGUuZnIiLCJhdWQiOiJodHRwczovL2NsYXVkZS1hdXRoLmxhcG9zdGUuZnIiLCJleHAiOiIxNDYxNTYxNzIxIiwic2NvcGVzIjpbInJlc3NvdXJjZXMucmVhZCIsInJlc3NvdXJjZXMud3JpdGUiXX0.rn6BGkwXv1bqaevBuroqNoBDP6d8dNo3dN1f6kwPqNU' \\\n  -H \"If-None-Match: 1\" \\\n  \"http://localhost:1337/prestations/v1/prestations/xafaro028EywThtEpe?fields=id,creation_date,modification_date\"\n  ```\n",
+                "operationId": "getOnePrestations",
+                "produces": [
+                    "application/json"
+                ],
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "id",
+                        "description": "identifiant unique de la ressource prestationsà récupérer (Ex: xafaro028EywThtEpe)",
+                        "required": true,
+                        "type": "string"
+                    },
+                    {
+                        "in": "query",
+                        "name": "fields",
+                        "description": "Listes des attributs à retourner (séparés par des virgules) (Ex : ?fields=id,creation_date)",
+                        "required": false,
+                        "type": "string"
+                    },
+                    {
+                        "in": "header",
+                        "name": "If-None-Match",
+                        "description": "Version de la ressource (voir etag) (Ex : 1)",
+                        "required": false,
+                        "type": "string"
+                    }
+                ],
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "successful operation",
+                        "schema": {
+                            "$ref": "#/definitions/Prestations"
+                        }
+                    },
+                    "304": {
+                        "description": "not modified"
+                    },
+                    "400": {
+                        "description": "Bad request, parameters are not correct",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/Error"
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized, the authentification is invalid or missing"
+                    },
+                    "403": {
+                        "description": "Forbidden, permissions are insufficient"
+                    },
+                    "404": {
+                        "description": "Not found"
+                    },
+                    "429": {
+                        "description": "Too many requests"
+                    },
+                    "500": {
+                        "description": "Internal server error"
+                    },
+                    "503": {
+                        "description": "Temporary unavailable",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/Error"
+                            }
+                        }
+                    }
+                }
+            },
+            "put": {
+                "tags": [
+                    "prestations"
+                ],
+                "summary": "Mise à jour complète (tous les arttributs)prestations",
+                "description": "\nFull update the ressource prestations `xafaro028EywThtEpe`\n\n\n  ```\n  curl -iX PUT \\\n  -H 'Accept: application/json' \\\n  -H 'Content-Type: application/json; charset=utf-8' \\\n  -H 'Authorization: eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJodHRwczovL2NsYXVkZS1pZHAubGFwb3N0ZS5mciIsInBybiI6ImNsYXVkZS5zZWd1cmV0QGxhcG9zdGUuZnIiLCJhdWQiOiJodHRwczovL2NsYXVkZS1hdXRoLmxhcG9zdGUuZnIiLCJleHAiOiIxNDYxNTYxNzIxIiwic2NvcGVzIjpbInJlc3NvdXJjZXMucmVhZCIsInJlc3NvdXJjZXMud3JpdGUiXX0.rn6BGkwXv1bqaevBuroqNoBDP6d8dNo3dN1f6kwPqNU' \\\n  -d '{\"id_prestations\":\"idpr745367457c02b\",\"nom_tournee\":\"TP-0001\",\"id_commanditaires\":\"123456\",\"id_campagnes\":\"idca123456\",\"ref_commanditaire_prestations\":\"campagne123-client3456\",\"date_modification\":\"2014-06-18T23:59:59Z\",\"date_creation\":\"2014-06-18T23:59:59Z\",\"nom_destinataire\":\"Alain Seguret\",\"adresse_destinataire_ligne2\":\"21 rue du 19 janvier\",\"adresse_destinataire_ligne3\":\"Les peupliers\",\"adresse_destinataire_ligne4\":\"\",\"adresse_destinataire_ligne5\":\"\",\"adresse_destinataire_ligne6\":\"92380 garches\",\"adresse_destinataire_ligne7\":\"France\",\"geolocalisation\":\"[-0.243148,44.945496]\",\"statut_adresse\":\"validee\",\"indication_acces_adresse\":\"digicode 12345\",\"information_complementaires\":\"\",\"type_prestation\":\"proxy-data\",\"date_debut_campagne\":\"2014-06-01T00:00:00Z\",\"date_fin_campagne\":\"2014-06-31T23:59:59Z\",\"date_planification\":\"2014-06-18T23:59:59Z\",\"statut_prestation\":\"a_faire\",\"complement_statut\":\"client_absent\",\"date_premier_passage\":\"2014-06-18T23:59:59Z\",\"date_replanification\":\"2014-06-18T23:59:59Z\",\"date_realisation\":\"2014-06-18T23:59:59Z\",\"id_tournees\":\"idtoac597bde356\",\"id_agents\":\"wyh254\",\"commentaire_libre\":\"Le client a demandé des informations complementaires, il est interessé par d'autres produits\",\"creation_date\":\"2016-03-18T06:18:14Z\",\"modification_date\":\"2016-03-18T06:18:14Z\",\"etag\":1}' \\\n  \"http://localhost:1337/prestations/v1/prestations/xafaro028EywThtEpe\"\n  ```\n",
+                "operationId": "fullUpdateOnePrestations",
+                "consumes": [
+                    "application/x-www-form-urlencoded"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ],
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "id",
+                        "description": "identifiant unique de la ressource prestations à mettre à jour (Ex: xafaro028EywThtEpe)",
+                        "required": true,
+                        "type": "string"
+                    },
+                    {
+                        "in": "body",
+                        "name": "body",
+                        "description": "ressource prestations",
+                        "required": false,
+                        "schema": {
+                            "$ref": "#/definitions/Prestations"
+                        }
+                    },
+                    {
+                        "in": "header",
+                        "name": "If-None-Match",
+                        "description": "Version de la ressource (voir etag) (Ex : 1)",
+                        "required": false,
+                        "type": "string"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Successful operation",
+                        "schema": {
+                            "$ref": "#/definitions/Prestations"
+                        }
+                    },
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/Prestations"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad request, parameters are not correct",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/Error"
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized, the authentification is invalid or missing"
+                    },
+                    "403": {
+                        "description": "Forbidden, permissions are insufficient"
+                    },
+                    "412": {
+                        "description": "Precondition failed, versions conflit"
+                    },
+                    "429": {
+                        "description": "Too many requests"
+                    },
+                    "500": {
+                        "description": "Internal server error"
+                    },
+                    "503": {
+                        "description": "Temporary unavailable",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/Error"
+                            }
+                        }
+                    }
+                }
+            },
+            "post": {
+                "tags": [
+                    "prestations"
+                ],
+                "summary": "mise à jour partielle (un ou plusieurs attributs) d'une ressource prestations",
+                "description": "Mise à jour partielle  de la ressourceprestations `xafaro028EywThtEpe`\n\n\n  ```\n  curl -iX POST \\\n  -H 'Accept: application/json' \\\n  -H 'Content-Type: application/json; charset=utf-8' \\\n  -H 'Authorization: eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJodHRwczovL2NsYXVkZS1pZHAubGFwb3N0ZS5mciIsInBybiI6ImNsYXVkZS5zZWd1cmV0QGxhcG9zdGUuZnIiLCJhdWQiOiJodHRwczovL2NsYXVkZS1hdXRoLmxhcG9zdGUuZnIiLCJleHAiOiIxNDYxNTYxNzIxIiwic2NvcGVzIjpbInJlc3NvdXJjZXMucmVhZCIsInJlc3NvdXJjZXMud3JpdGUiXX0.rn6BGkwXv1bqaevBuroqNoBDP6d8dNo3dN1f6kwPqNU' \\\n  -d '{\"id_prestations\":\"idpr745367457c02b\",\"nom_tournee\":\"TP-0001\",\"id_commanditaires\":\"123456\",\"id_campagnes\":\"idca123456\",\"ref_commanditaire_prestations\":\"campagne123-client3456\",\"date_modification\":\"2014-06-18T23:59:59Z\",\"date_creation\":\"2014-06-18T23:59:59Z\",\"nom_destinataire\":\"Alain Seguret\",\"adresse_destinataire_ligne2\":\"21 rue du 19 janvier\",\"adresse_destinataire_ligne3\":\"Les peupliers\",\"adresse_destinataire_ligne4\":\"\",\"adresse_destinataire_ligne5\":\"\",\"adresse_destinataire_ligne6\":\"92380 garches\",\"adresse_destinataire_ligne7\":\"France\",\"geolocalisation\":\"[-0.243148,44.945496]\",\"statut_adresse\":\"validee\",\"indication_acces_adresse\":\"digicode 12345\",\"information_complementaires\":\"\",\"type_prestation\":\"proxy-data\",\"date_debut_campagne\":\"2014-06-01T00:00:00Z\",\"date_fin_campagne\":\"2014-06-31T23:59:59Z\",\"date_planification\":\"2014-06-18T23:59:59Z\",\"statut_prestation\":\"a_faire\",\"complement_statut\":\"client_absent\",\"date_premier_passage\":\"2014-06-18T23:59:59Z\",\"date_replanification\":\"2014-06-18T23:59:59Z\",\"date_realisation\":\"2014-06-18T23:59:59Z\",\"id_tournees\":\"idtoac597bde356\",\"id_agents\":\"wyh254\",\"commentaire_libre\":\"Le client a demandé des informations complementaires, il est interessé par d'autres produits\",\"creation_date\":\"2016-03-18T06:18:14Z\",\"modification_date\":\"2016-03-18T06:18:14Z\",\"etag\":1}' \\\n  \"http://localhost:1337/prestations/v1/prestations/xafaro028EywThtEpe\"\n  ```\n",
+                "operationId": "partialUpdatePrestations",
+                "consumes": [
+                    "application/x-www-form-urlencoded"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ],
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "id",
+                        "description": "identifiant unique de la ressource prestations à mettre à jour (Ex: xafaro028EywThtEpe)",
+                        "required": true,
+                        "type": "string"
+                    },
+                    {
+                        "in": "body",
+                        "name": "body",
+                        "description": "ressource prestations",
+                        "required": false,
+                        "schema": {
+                            "$ref": "#/definitions/Prestations"
+                        }
+                    },
+                    {
+                        "in": "header",
+                        "name": "If-None-Match",
+                        "description": "Version de la ressource (voir etag) (Ex : 1)",
+                        "required": false,
+                        "type": "string"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "successful operation",
+                        "schema": {
+                            "$ref": "#/definitions/Prestations"
+                        }
+                    },
+                    "304": {
+                        "description": "not modified"
+                    },
+                    "400": {
+                        "description": "Bad request, parameters are not correct",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/Error"
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized, the authentification is invalid or missing"
+                    },
+                    "403": {
+                        "description": "Forbidden, permissions are insufficient"
+                    },
+                    "404": {
+                        "description": "Not found"
+                    },
+                    "412": {
+                        "description": "Precondition failed, versions conflit"
+                    },
+                    "429": {
+                        "description": "Too many requests"
+                    },
+                    "500": {
+                        "description": "Internal server error"
+                    },
+                    "503": {
+                        "description": "Temporary unavailable",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/Error"
+                            }
+                        }
+                    }
+                }
+            },
+            "patch": {
+                "tags": [
+                    "prestations"
+                ],
+                "summary": "mise à jour partielle (un ou plusieurs attributs) d'une ressource prestations",
+                "description": "Mise à jour partielle  de la ressourceprestations `xafaro028EywThtEpe`\n\n\n  ```\n  curl -iX PATCH \\\n  -H 'Accept: application/json' \\\n  -H 'Content-Type: application/json; charset=utf-8' \\\n  -H 'Authorization: eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJodHRwczovL2NsYXVkZS1pZHAubGFwb3N0ZS5mciIsInBybiI6ImNsYXVkZS5zZWd1cmV0QGxhcG9zdGUuZnIiLCJhdWQiOiJodHRwczovL2NsYXVkZS1hdXRoLmxhcG9zdGUuZnIiLCJleHAiOiIxNDYxNTYxNzIxIiwic2NvcGVzIjpbInJlc3NvdXJjZXMucmVhZCIsInJlc3NvdXJjZXMud3JpdGUiXX0.rn6BGkwXv1bqaevBuroqNoBDP6d8dNo3dN1f6kwPqNU' \\\n  -d '{\"id_prestations\":\"idpr745367457c02b\",\"nom_tournee\":\"TP-0001\",\"id_commanditaires\":\"123456\",\"id_campagnes\":\"idca123456\",\"ref_commanditaire_prestations\":\"campagne123-client3456\",\"date_modification\":\"2014-06-18T23:59:59Z\",\"date_creation\":\"2014-06-18T23:59:59Z\",\"nom_destinataire\":\"Alain Seguret\",\"adresse_destinataire_ligne2\":\"21 rue du 19 janvier\",\"adresse_destinataire_ligne3\":\"Les peupliers\",\"adresse_destinataire_ligne4\":\"\",\"adresse_destinataire_ligne5\":\"\",\"adresse_destinataire_ligne6\":\"92380 garches\",\"adresse_destinataire_ligne7\":\"France\",\"geolocalisation\":\"[-0.243148,44.945496]\",\"statut_adresse\":\"validee\",\"indication_acces_adresse\":\"digicode 12345\",\"information_complementaires\":\"\",\"type_prestation\":\"proxy-data\",\"date_debut_campagne\":\"2014-06-01T00:00:00Z\",\"date_fin_campagne\":\"2014-06-31T23:59:59Z\",\"date_planification\":\"2014-06-18T23:59:59Z\",\"statut_prestation\":\"a_faire\",\"complement_statut\":\"client_absent\",\"date_premier_passage\":\"2014-06-18T23:59:59Z\",\"date_replanification\":\"2014-06-18T23:59:59Z\",\"date_realisation\":\"2014-06-18T23:59:59Z\",\"id_tournees\":\"idtoac597bde356\",\"id_agents\":\"wyh254\",\"commentaire_libre\":\"Le client a demandé des informations complementaires, il est interessé par d'autres produits\",\"creation_date\":\"2016-03-18T06:18:14Z\",\"modification_date\":\"2016-03-18T06:18:14Z\",\"etag\":1}' \\\n  \"http://localhost:1337/prestations/v1/prestations/xafaro028EywThtEpe\"\n  ```\n",
+                "operationId": "patchPrestations",
+                "consumes": [
+                    "application/x-www-form-urlencoded"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ],
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "id",
+                        "description": "identifiant unique de la ressource prestations à mettre à jour (Ex: xafaro028EywThtEpe)",
+                        "required": true,
+                        "type": "string"
+                    },
+                    {
+                        "in": "body",
+                        "name": "body",
+                        "description": "ressource prestations",
+                        "required": false,
+                        "schema": {
+                            "$ref": "#/definitions/Prestations"
+                        }
+                    },
+                    {
+                        "in": "header",
+                        "name": "If-None-Match",
+                        "description": "Version de la ressource (voir etag) (Ex : 1)",
+                        "required": false,
+                        "type": "string"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "successful operation",
+                        "schema": {
+                            "$ref": "#/definitions/Prestations"
+                        }
+                    },
+                    "304": {
+                        "description": "not modified"
+                    },
+                    "400": {
+                        "description": "Bad request, parameters are not correct",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/Error"
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized, the authentification is invalid or missing"
+                    },
+                    "403": {
+                        "description": "Forbidden, permissions are insufficient"
+                    },
+                    "404": {
+                        "description": "Not found"
+                    },
+                    "412": {
+                        "description": "Precondition failed, versions conflit"
+                    },
+                    "429": {
+                        "description": "Too many requests"
+                    },
+                    "500": {
+                        "description": "Internal server error"
+                    },
+                    "503": {
+                        "description": "Temporary unavailable",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/Error"
+                            }
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "tags": [
+                    "prestations"
+                ],
+                "summary": "Supprime une ressourceprestations",
+                "description": "Supprime la ressource prestations `xafaro028EywThtEpe`\n\n\n  ```\n  curl -iX DELETE \\\n  -H 'Accept: application/json' \\\n  -H 'Authorization: eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJodHRwczovL2NsYXVkZS1pZHAubGFwb3N0ZS5mciIsInBybiI6ImNsYXVkZS5zZWd1cmV0QGxhcG9zdGUuZnIiLCJhdWQiOiJodHRwczovL2NsYXVkZS1hdXRoLmxhcG9zdGUuZnIiLCJleHAiOiIxNDYxNTYxNzIxIiwic2NvcGVzIjpbInJlc3NvdXJjZXMucmVhZCIsInJlc3NvdXJjZXMud3JpdGUiXX0.rn6BGkwXv1bqaevBuroqNoBDP6d8dNo3dN1f6kwPqNU' \\\n  \"http://localhost:1337/prestations/v1/prestations/xafaro028EywThtEpe\"\n  ```\n",
+                "operationId": "deleteOnePrestations",
+                "produces": [
+                    "application/json"
+                ],
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ],
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "id",
+                        "description": "identifiant unique de la ressource prestations à supprimer (Ex: xafaro028EywThtEpe)",
+                        "required": true,
+                        "type": "string"
+                    },
+                    {
+                        "in": "header",
+                        "name": "If-None-Match",
+                        "description": "Version de la ressource (voir etag) (Ex : 1)",
+                        "required": false,
+                        "type": "string"
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "Deleted"
+                    },
+                    "401": {
+                        "description": "Unauthorized, the authentification is invalid or missing"
+                    },
+                    "403": {
+                        "description": "Forbidden, permissions are insufficient"
+                    },
+                    "404": {
+                        "description": "Not found"
+                    },
+                    "429": {
+                        "description": "Too many requests"
+                    },
+                    "500": {
+                        "description": "Internal server error"
+                    },
+                    "503": {
+                        "description": "Temporary unavailable",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/Error"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/prestations/search": {
+            "get": {
+                "tags": [
+                    "prestations"
+                ],
+                "summary": "Fulltext search on all attribute of prestations",
+                "description": "\nSearch ressources prestations avec différents critères de recherche, pagination et des filtres sur les attributs.\n\nExemple avec des critères de pagination (count, start_index)\n\n\n  ```\n  curl -iX GET \\\n  -H 'Accept: application/json' \\\n  -H 'Authorization: eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJodHRwczovL2NsYXVkZS1pZHAubGFwb3N0ZS5mciIsInBybiI6ImNsYXVkZS5zZWd1cmV0QGxhcG9zdGUuZnIiLCJhdWQiOiJodHRwczovL2NsYXVkZS1hdXRoLmxhcG9zdGUuZnIiLCJleHAiOiIxNDYxNTYxNzIxIiwic2NvcGVzIjpbInJlc3NvdXJjZXMucmVhZCIsInJlc3NvdXJjZXMud3JpdGUiXX0.rn6BGkwXv1bqaevBuroqNoBDP6d8dNo3dN1f6kwPqNU' \\\n  \"http://localhost:1337/prestations/v1/prestations/search?q=v*&start_index=1&count=10\"\n  ```\n\nExemple avec des critères de date\n\n\n  ```\n  curl -iX GET \\\n  -H 'Accept: application/json' \\\n  -H 'Authorization: eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJodHRwczovL2NsYXVkZS1pZHAubGFwb3N0ZS5mciIsInBybiI6ImNsYXVkZS5zZWd1cmV0QGxhcG9zdGUuZnIiLCJhdWQiOiJodHRwczovL2NsYXVkZS1hdXRoLmxhcG9zdGUuZnIiLCJleHAiOiIxNDYxNTYxNzIxIiwic2NvcGVzIjpbInJlc3NvdXJjZXMucmVhZCIsInJlc3NvdXJjZXMud3JpdGUiXX0.rn6BGkwXv1bqaevBuroqNoBDP6d8dNo3dN1f6kwPqNU' \\\n  \"http://localhost:1337/prestations/v1/prestations/search?q=v*&creation_date_gte=2015-06-18T00:00:00Z\"\n  ```\n\nExemple avec des filtres sur les attributs retournés\n\n\n  ```\n  curl -iX GET \\\n  -H 'Accept: application/json' \\\n  -H 'Authorization: eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJodHRwczovL2NsYXVkZS1pZHAubGFwb3N0ZS5mciIsInBybiI6ImNsYXVkZS5zZWd1cmV0QGxhcG9zdGUuZnIiLCJhdWQiOiJodHRwczovL2NsYXVkZS1hdXRoLmxhcG9zdGUuZnIiLCJleHAiOiIxNDYxNTYxNzIxIiwic2NvcGVzIjpbInJlc3NvdXJjZXMucmVhZCIsInJlc3NvdXJjZXMud3JpdGUiXX0.rn6BGkwXv1bqaevBuroqNoBDP6d8dNo3dN1f6kwPqNU' \\\n  \"http://localhost:1337/prestations/v1/prestations/search?q=v*&creation_date_gte=2015-06-18T00:00:00Z&fields=id,modification_date\"\n  ```\n",
+                "operationId": "searchPrestations",
+                "produces": [
+                    "application/json"
+                ],
+                "parameters": [
+                    {
+                        "in": "query",
+                        "name": "q",
+                        "description": "champs de recherche fulltext\nEx ?q=recherh*\n",
+                        "required": false,
+                        "type": "string"
+                    },
+                    {
+                        "in": "query",
+                        "name": "fields",
+                        "description": "Listes des attributs à retourner (séparés par des virgules) Ex ?fields=id,creation_date\n",
+                        "required": false,
+                        "type": "string"
+                    },
+                    {
+                        "in": "query",
+                        "name": "start_index",
+                        "description": "Premier élément à retourner (commence à 1)",
+                        "default": 1,
+                        "required": false,
+                        "type": "integer",
+                        "format": "int64"
+                    },
+                    {
+                        "in": "query",
+                        "name": "count",
+                        "description": "Number of itemà récupérer (default 10, max 999)",
+                        "default": 20,
+                        "maximum": 999,
+                        "required": false,
+                        "type": "integer",
+                        "format": "int64"
+                    },
+                    {
+                        "in": "header",
+                        "name": "If-None-Match",
+                        "description": "Version de la ressource (voir etag) (Ex : 1)",
+                        "required": false,
+                        "type": "string"
+                    }
+                ],
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "successful operation",
+                        "schema": {
+                            "$ref": "#/definitions/Prestations"
+                        }
+                    },
+                    "304": {
+                        "description": "not modified"
+                    },
+                    "400": {
+                        "description": "Bad request, parameters are not correct",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/Error"
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized, the authentification is invalid or missing"
+                    },
+                    "403": {
+                        "description": "Forbidden, permissions are insufficient"
+                    },
+                    "429": {
+                        "description": "Too many requests"
+                    },
+                    "500": {
+                        "description": "Internal server error"
+                    },
+                    "503": {
+                        "description": "Temporary unavailable",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/Error"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/campagnes": {
+            "get": {
+                "tags": [
+                    "campagnes"
+                ],
+                "summary": "Récupère une liste de ressource campagnes",
+                "description": "\n\nRécupérer campagnes avec différents critères de recherche, pagination et des filtres sur les attributs.\n\nExemple avec des critères de pagination (count, start_index)\n\n\n  ```\n  curl -iX GET \\\n  -H 'Accept: application/json' \\\n  -H 'Authorization: eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJodHRwczovL2NsYXVkZS1pZHAubGFwb3N0ZS5mciIsInBybiI6ImNsYXVkZS5zZWd1cmV0QGxhcG9zdGUuZnIiLCJhdWQiOiJodHRwczovL2NsYXVkZS1hdXRoLmxhcG9zdGUuZnIiLCJleHAiOiIxNDYxNTYxNzIxIiwic2NvcGVzIjpbInJlc3NvdXJjZXMucmVhZCIsInJlc3NvdXJjZXMud3JpdGUiXX0.rn6BGkwXv1bqaevBuroqNoBDP6d8dNo3dN1f6kwPqNU' \\\n  \"http://localhost:1337/prestations/v1/campagnes?start_index=1&count=10\"\n  ```\n\nExemple avec des critères de date\n\n\n  ```\n  curl -iX GET \\\n  -H 'Accept: application/json' \\\n  -H 'Authorization: eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJodHRwczovL2NsYXVkZS1pZHAubGFwb3N0ZS5mciIsInBybiI6ImNsYXVkZS5zZWd1cmV0QGxhcG9zdGUuZnIiLCJhdWQiOiJodHRwczovL2NsYXVkZS1hdXRoLmxhcG9zdGUuZnIiLCJleHAiOiIxNDYxNTYxNzIxIiwic2NvcGVzIjpbInJlc3NvdXJjZXMucmVhZCIsInJlc3NvdXJjZXMud3JpdGUiXX0.rn6BGkwXv1bqaevBuroqNoBDP6d8dNo3dN1f6kwPqNU' \\\n  \"http://localhost:1337/prestations/v1/campagnes?creation_date_gte=2015-06-18T00:00:00Z\"\n  ```\n\nExemple avec des filtres sur les attributs retournés\n\n\n  ```\n  curl -iX GET \\\n  -H 'Accept: application/json' \\\n  -H 'Authorization: eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJodHRwczovL2NsYXVkZS1pZHAubGFwb3N0ZS5mciIsInBybiI6ImNsYXVkZS5zZWd1cmV0QGxhcG9zdGUuZnIiLCJhdWQiOiJodHRwczovL2NsYXVkZS1hdXRoLmxhcG9zdGUuZnIiLCJleHAiOiIxNDYxNTYxNzIxIiwic2NvcGVzIjpbInJlc3NvdXJjZXMucmVhZCIsInJlc3NvdXJjZXMud3JpdGUiXX0.rn6BGkwXv1bqaevBuroqNoBDP6d8dNo3dN1f6kwPqNU' \\\n  \"http://localhost:1337/prestations/v1/campagnes?creation_date_gte=2015-06-18T00:00:00Z&fields=id,modification_date\"\n  ```\n",
+                "operationId": "listCampagnes",
+                "produces": [
+                    "application/json"
+                ],
+                "parameters": [
+                    {
+                        "in": "query",
+                        "name": "fields",
+                        "description": "Listes des attributs à retourner (séparés par des virgules) Ex ?fields=id,creation_date\n",
+                        "required": false,
+                        "type": "string"
+                    },
+                    {
+                        "in": "query",
+                        "name": "start_index",
+                        "description": "Premier élément à retourner (commence à 1)",
+                        "required": false,
+                        "type": "integer",
+                        "format": "int64"
+                    },
+                    {
+                        "in": "query",
+                        "name": "count",
+                        "description": "Nombre d'éléments à retourner (par défaut 30, max 1000)",
+                        "maximum": 1000,
+                        "required": false,
+                        "type": "integer",
+                        "format": "int64"
+                    },
+                    {
+                        "in": "header",
+                        "name": "If-None-Match",
+                        "description": "Version de la ressource (voir etag) (Ex : 1)",
+                        "required": false,
+                        "type": "string"
+                    }
+                ],
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "successful operation",
+                        "schema": {
+                            "$ref": "#/definitions/PaginationCampagnes"
+                        }
+                    },
+                    "304": {
+                        "description": "not modified"
+                    },
+                    "400": {
+                        "description": "Bad request, parameters are not correct",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/Error"
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized, the authentification is invalid or missing"
+                    },
+                    "403": {
+                        "description": "Forbidden, permissions are insufficient"
+                    },
+                    "429": {
+                        "description": "Too many requests"
+                    },
+                    "500": {
+                        "description": "Internal server error"
+                    },
+                    "503": {
+                        "description": "Temporary unavailable",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/Error"
+                            }
+                        }
+                    }
+                }
+            },
+            "post": {
+                "tags": [
+                    "campagnes"
+                ],
+                "summary": "Crée une ressource campagnes",
+                "description": "Crée une ressource campagnes\n\n\n  ```\n  curl -iX POST \\\n  -H 'Accept: application/json' \\\n  -H 'Content-Type: application/json; charset=utf-8' \\\n  -H 'Authorization: eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJodHRwczovL2NsYXVkZS1pZHAubGFwb3N0ZS5mciIsInBybiI6ImNsYXVkZS5zZWd1cmV0QGxhcG9zdGUuZnIiLCJhdWQiOiJodHRwczovL2NsYXVkZS1hdXRoLmxhcG9zdGUuZnIiLCJleHAiOiIxNDYxNTYxNzIxIiwic2NvcGVzIjpbInJlc3NvdXJjZXMucmVhZCIsInJlc3NvdXJjZXMud3JpdGUiXX0.rn6BGkwXv1bqaevBuroqNoBDP6d8dNo3dN1f6kwPqNU' \\\n  -d '{\"titre\":\"Petit dejeuner Carrefour\",\"id_commanditaires\":\"idco0dab467457cdab\",\"id_utilisateurs\":\"pwyh295\",\"date_debut_campagne\":\"2015-06-18T00:00:00Z\",\"date_fin_campagne\":\"2015-20-18T23:59:59Z\",\"statut_campagne\":\"lancee\",\"description\":\"Questionnnaire petit déjeuner\",\"aide\":\"10 minutes seulement suffisent\",\"discours_agent\":\"bonjour, voulez-vous participez à une enquête BVA\",\"questions\":\"format Q/R IBM\",\"creation_date\":\"2014-06-18T23:59:59Z\",\"modification_date\":\"2014-06-18T23:59:59Z\",\"etag\":1}' \\\n  'http://localhost:1337/prestations/v1/campagnes'\n  ```\n",
+                "operationId": "createCampagnes",
+                "consumes": [
+                    "application/x-www-form-urlencoded"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ],
+                "parameters": [
+                    {
+                        "in": "body",
+                        "name": "body",
+                        "description": "ressource campagnes",
+                        "required": false,
+                        "schema": {
+                            "$ref": "#/definitions/Campagnes"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/Campagnes"
+                        }
+                    },
+                    "304": {
+                        "description": "not modified"
+                    },
+                    "400": {
+                        "description": "Bad request, parameters are not correct",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/Error"
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized, the authentification is invalid or missing"
+                    },
+                    "403": {
+                        "description": "Forbidden, permissions are insufficient"
+                    },
+                    "404": {
+                        "description": "Not found"
+                    },
+                    "412": {
+                        "description": "Precondition failed, versions conflit"
+                    },
+                    "429": {
+                        "description": "Too many requests"
+                    },
+                    "500": {
+                        "description": "Internal server error"
+                    },
+                    "503": {
+                        "description": "Temporary unavailable",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/Error"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/campagnes/{id}": {
+            "get": {
+                "tags": [
+                    "campagnes"
+                ],
+                "summary": "Récupère une ressource campagnes",
+                "description": "\nRécupère la ressourcecampagnes `tizoli005E14FGyLTx` avec des filtres sur les attributs\n\n  ```\n  curl -iX GET \\\n  -H 'Accept: application/json' \\\n  -H 'Authorization: eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJodHRwczovL2NsYXVkZS1pZHAubGFwb3N0ZS5mciIsInBybiI6ImNsYXVkZS5zZWd1cmV0QGxhcG9zdGUuZnIiLCJhdWQiOiJodHRwczovL2NsYXVkZS1hdXRoLmxhcG9zdGUuZnIiLCJleHAiOiIxNDYxNTYxNzIxIiwic2NvcGVzIjpbInJlc3NvdXJjZXMucmVhZCIsInJlc3NvdXJjZXMud3JpdGUiXX0.rn6BGkwXv1bqaevBuroqNoBDP6d8dNo3dN1f6kwPqNU' \\\n  -H \"If-None-Match: 1\" \\\n  \"http://localhost:1337/prestations/v1/campagnes/tizoli005E14FGyLTx?fields=id,creation_date,modification_date\"\n  ```\n",
+                "operationId": "getOneCampagnes",
+                "produces": [
+                    "application/json"
+                ],
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "id",
+                        "description": "identifiant unique de la ressource campagnesà récupérer (Ex: tizoli005E14FGyLTx)",
+                        "required": true,
+                        "type": "string"
+                    },
+                    {
+                        "in": "query",
+                        "name": "fields",
+                        "description": "Listes des attributs à retourner (séparés par des virgules) (Ex : ?fields=id,creation_date)",
+                        "required": false,
+                        "type": "string"
+                    },
+                    {
+                        "in": "header",
+                        "name": "If-None-Match",
+                        "description": "Version de la ressource (voir etag) (Ex : 1)",
+                        "required": false,
+                        "type": "string"
+                    }
+                ],
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "successful operation",
+                        "schema": {
+                            "$ref": "#/definitions/Campagnes"
+                        }
+                    },
+                    "304": {
+                        "description": "not modified"
+                    },
+                    "400": {
+                        "description": "Bad request, parameters are not correct",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/Error"
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized, the authentification is invalid or missing"
+                    },
+                    "403": {
+                        "description": "Forbidden, permissions are insufficient"
+                    },
+                    "404": {
+                        "description": "Not found"
+                    },
+                    "429": {
+                        "description": "Too many requests"
+                    },
+                    "500": {
+                        "description": "Internal server error"
+                    },
+                    "503": {
+                        "description": "Temporary unavailable",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/Error"
+                            }
+                        }
+                    }
+                }
+            },
+            "put": {
+                "tags": [
+                    "campagnes"
+                ],
+                "summary": "Mise à jour complète (tous les arttributs)campagnes",
+                "description": "\nFull update the ressource campagnes `tizoli005E14FGyLTx`\n\n\n  ```\n  curl -iX PUT \\\n  -H 'Accept: application/json' \\\n  -H 'Content-Type: application/json; charset=utf-8' \\\n  -H 'Authorization: eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJodHRwczovL2NsYXVkZS1pZHAubGFwb3N0ZS5mciIsInBybiI6ImNsYXVkZS5zZWd1cmV0QGxhcG9zdGUuZnIiLCJhdWQiOiJodHRwczovL2NsYXVkZS1hdXRoLmxhcG9zdGUuZnIiLCJleHAiOiIxNDYxNTYxNzIxIiwic2NvcGVzIjpbInJlc3NvdXJjZXMucmVhZCIsInJlc3NvdXJjZXMud3JpdGUiXX0.rn6BGkwXv1bqaevBuroqNoBDP6d8dNo3dN1f6kwPqNU' \\\n  -d '{\"titre\":\"Petit dejeuner Carrefour\",\"id_commanditaires\":\"idco0dab467457cdab\",\"id_utilisateurs\":\"pwyh295\",\"date_debut_campagne\":\"2015-06-18T00:00:00Z\",\"date_fin_campagne\":\"2015-20-18T23:59:59Z\",\"statut_campagne\":\"lancee\",\"description\":\"Questionnnaire petit déjeuner\",\"aide\":\"10 minutes seulement suffisent\",\"discours_agent\":\"bonjour, voulez-vous participez à une enquête BVA\",\"questions\":\"format Q/R IBM\",\"creation_date\":\"2014-06-18T23:59:59Z\",\"modification_date\":\"2014-06-18T23:59:59Z\",\"etag\":1}' \\\n  \"http://localhost:1337/prestations/v1/campagnes/tizoli005E14FGyLTx\"\n  ```\n",
+                "operationId": "fullUpdateOneCampagnes",
+                "consumes": [
+                    "application/x-www-form-urlencoded"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ],
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "id",
+                        "description": "identifiant unique de la ressource campagnes à mettre à jour (Ex: tizoli005E14FGyLTx)",
+                        "required": true,
+                        "type": "string"
+                    },
+                    {
+                        "in": "body",
+                        "name": "body",
+                        "description": "ressource campagnes",
+                        "required": false,
+                        "schema": {
+                            "$ref": "#/definitions/Campagnes"
+                        }
+                    },
+                    {
+                        "in": "header",
+                        "name": "If-None-Match",
+                        "description": "Version de la ressource (voir etag) (Ex : 1)",
+                        "required": false,
+                        "type": "string"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Successful operation",
+                        "schema": {
+                            "$ref": "#/definitions/Campagnes"
+                        }
+                    },
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/Campagnes"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad request, parameters are not correct",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/Error"
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized, the authentification is invalid or missing"
+                    },
+                    "403": {
+                        "description": "Forbidden, permissions are insufficient"
+                    },
+                    "412": {
+                        "description": "Precondition failed, versions conflit"
+                    },
+                    "429": {
+                        "description": "Too many requests"
+                    },
+                    "500": {
+                        "description": "Internal server error"
+                    },
+                    "503": {
+                        "description": "Temporary unavailable",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/Error"
+                            }
+                        }
+                    }
+                }
+            },
+            "post": {
+                "tags": [
+                    "campagnes"
+                ],
+                "summary": "mise à jour partielle (un ou plusieurs attributs) d'une ressource campagnes",
+                "description": "Mise à jour partielle  de la ressourcecampagnes `tizoli005E14FGyLTx`\n\n\n  ```\n  curl -iX POST \\\n  -H 'Accept: application/json' \\\n  -H 'Content-Type: application/json; charset=utf-8' \\\n  -H 'Authorization: eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJodHRwczovL2NsYXVkZS1pZHAubGFwb3N0ZS5mciIsInBybiI6ImNsYXVkZS5zZWd1cmV0QGxhcG9zdGUuZnIiLCJhdWQiOiJodHRwczovL2NsYXVkZS1hdXRoLmxhcG9zdGUuZnIiLCJleHAiOiIxNDYxNTYxNzIxIiwic2NvcGVzIjpbInJlc3NvdXJjZXMucmVhZCIsInJlc3NvdXJjZXMud3JpdGUiXX0.rn6BGkwXv1bqaevBuroqNoBDP6d8dNo3dN1f6kwPqNU' \\\n  -d '{\"titre\":\"Petit dejeuner Carrefour\",\"id_commanditaires\":\"idco0dab467457cdab\",\"id_utilisateurs\":\"pwyh295\",\"date_debut_campagne\":\"2015-06-18T00:00:00Z\",\"date_fin_campagne\":\"2015-20-18T23:59:59Z\",\"statut_campagne\":\"lancee\",\"description\":\"Questionnnaire petit déjeuner\",\"aide\":\"10 minutes seulement suffisent\",\"discours_agent\":\"bonjour, voulez-vous participez à une enquête BVA\",\"questions\":\"format Q/R IBM\",\"creation_date\":\"2014-06-18T23:59:59Z\",\"modification_date\":\"2014-06-18T23:59:59Z\",\"etag\":1}' \\\n  \"http://localhost:1337/prestations/v1/campagnes/tizoli005E14FGyLTx\"\n  ```\n",
+                "operationId": "partialUpdateCampagnes",
+                "consumes": [
+                    "application/x-www-form-urlencoded"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ],
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "id",
+                        "description": "identifiant unique de la ressource campagnes à mettre à jour (Ex: tizoli005E14FGyLTx)",
+                        "required": true,
+                        "type": "string"
+                    },
+                    {
+                        "in": "body",
+                        "name": "body",
+                        "description": "ressource campagnes",
+                        "required": false,
+                        "schema": {
+                            "$ref": "#/definitions/Campagnes"
+                        }
+                    },
+                    {
+                        "in": "header",
+                        "name": "If-None-Match",
+                        "description": "Version de la ressource (voir etag) (Ex : 1)",
+                        "required": false,
+                        "type": "string"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "successful operation",
+                        "schema": {
+                            "$ref": "#/definitions/Campagnes"
+                        }
+                    },
+                    "304": {
+                        "description": "not modified"
+                    },
+                    "400": {
+                        "description": "Bad request, parameters are not correct",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/Error"
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized, the authentification is invalid or missing"
+                    },
+                    "403": {
+                        "description": "Forbidden, permissions are insufficient"
+                    },
+                    "404": {
+                        "description": "Not found"
+                    },
+                    "412": {
+                        "description": "Precondition failed, versions conflit"
+                    },
+                    "429": {
+                        "description": "Too many requests"
+                    },
+                    "500": {
+                        "description": "Internal server error"
+                    },
+                    "503": {
+                        "description": "Temporary unavailable",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/Error"
+                            }
+                        }
+                    }
+                }
+            },
+            "patch": {
+                "tags": [
+                    "campagnes"
+                ],
+                "summary": "mise à jour partielle (un ou plusieurs attributs) d'une ressource campagnes",
+                "description": "Mise à jour partielle  de la ressourcecampagnes `tizoli005E14FGyLTx`\n\n\n  ```\n  curl -iX PATCH \\\n  -H 'Accept: application/json' \\\n  -H 'Content-Type: application/json; charset=utf-8' \\\n  -H 'Authorization: eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJodHRwczovL2NsYXVkZS1pZHAubGFwb3N0ZS5mciIsInBybiI6ImNsYXVkZS5zZWd1cmV0QGxhcG9zdGUuZnIiLCJhdWQiOiJodHRwczovL2NsYXVkZS1hdXRoLmxhcG9zdGUuZnIiLCJleHAiOiIxNDYxNTYxNzIxIiwic2NvcGVzIjpbInJlc3NvdXJjZXMucmVhZCIsInJlc3NvdXJjZXMud3JpdGUiXX0.rn6BGkwXv1bqaevBuroqNoBDP6d8dNo3dN1f6kwPqNU' \\\n  -d '{\"titre\":\"Petit dejeuner Carrefour\",\"id_commanditaires\":\"idco0dab467457cdab\",\"id_utilisateurs\":\"pwyh295\",\"date_debut_campagne\":\"2015-06-18T00:00:00Z\",\"date_fin_campagne\":\"2015-20-18T23:59:59Z\",\"statut_campagne\":\"lancee\",\"description\":\"Questionnnaire petit déjeuner\",\"aide\":\"10 minutes seulement suffisent\",\"discours_agent\":\"bonjour, voulez-vous participez à une enquête BVA\",\"questions\":\"format Q/R IBM\",\"creation_date\":\"2014-06-18T23:59:59Z\",\"modification_date\":\"2014-06-18T23:59:59Z\",\"etag\":1}' \\\n  \"http://localhost:1337/prestations/v1/campagnes/tizoli005E14FGyLTx\"\n  ```\n",
+                "operationId": "patchCampagnes",
+                "consumes": [
+                    "application/x-www-form-urlencoded"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ],
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "id",
+                        "description": "identifiant unique de la ressource campagnes à mettre à jour (Ex: tizoli005E14FGyLTx)",
+                        "required": true,
+                        "type": "string"
+                    },
+                    {
+                        "in": "body",
+                        "name": "body",
+                        "description": "ressource campagnes",
+                        "required": false,
+                        "schema": {
+                            "$ref": "#/definitions/Campagnes"
+                        }
+                    },
+                    {
+                        "in": "header",
+                        "name": "If-None-Match",
+                        "description": "Version de la ressource (voir etag) (Ex : 1)",
+                        "required": false,
+                        "type": "string"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "successful operation",
+                        "schema": {
+                            "$ref": "#/definitions/Campagnes"
+                        }
+                    },
+                    "304": {
+                        "description": "not modified"
+                    },
+                    "400": {
+                        "description": "Bad request, parameters are not correct",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/Error"
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized, the authentification is invalid or missing"
+                    },
+                    "403": {
+                        "description": "Forbidden, permissions are insufficient"
+                    },
+                    "404": {
+                        "description": "Not found"
+                    },
+                    "412": {
+                        "description": "Precondition failed, versions conflit"
+                    },
+                    "429": {
+                        "description": "Too many requests"
+                    },
+                    "500": {
+                        "description": "Internal server error"
+                    },
+                    "503": {
+                        "description": "Temporary unavailable",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/Error"
+                            }
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "tags": [
+                    "campagnes"
+                ],
+                "summary": "Supprime une ressourcecampagnes",
+                "description": "Supprime la ressource campagnes `tizoli005E14FGyLTx`\n\n\n  ```\n  curl -iX DELETE \\\n  -H 'Accept: application/json' \\\n  -H 'Authorization: eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJodHRwczovL2NsYXVkZS1pZHAubGFwb3N0ZS5mciIsInBybiI6ImNsYXVkZS5zZWd1cmV0QGxhcG9zdGUuZnIiLCJhdWQiOiJodHRwczovL2NsYXVkZS1hdXRoLmxhcG9zdGUuZnIiLCJleHAiOiIxNDYxNTYxNzIxIiwic2NvcGVzIjpbInJlc3NvdXJjZXMucmVhZCIsInJlc3NvdXJjZXMud3JpdGUiXX0.rn6BGkwXv1bqaevBuroqNoBDP6d8dNo3dN1f6kwPqNU' \\\n  \"http://localhost:1337/prestations/v1/campagnes/tizoli005E14FGyLTx\"\n  ```\n",
+                "operationId": "deleteOneCampagnes",
+                "produces": [
+                    "application/json"
+                ],
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ],
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "id",
+                        "description": "identifiant unique de la ressource campagnes à supprimer (Ex: tizoli005E14FGyLTx)",
+                        "required": true,
+                        "type": "string"
+                    },
+                    {
+                        "in": "header",
+                        "name": "If-None-Match",
+                        "description": "Version de la ressource (voir etag) (Ex : 1)",
+                        "required": false,
+                        "type": "string"
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "Deleted"
+                    },
+                    "401": {
+                        "description": "Unauthorized, the authentification is invalid or missing"
+                    },
+                    "403": {
+                        "description": "Forbidden, permissions are insufficient"
+                    },
+                    "404": {
+                        "description": "Not found"
+                    },
+                    "429": {
+                        "description": "Too many requests"
+                    },
+                    "500": {
+                        "description": "Internal server error"
+                    },
+                    "503": {
+                        "description": "Temporary unavailable",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/Error"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/campagnes/search": {
+            "get": {
+                "tags": [
+                    "campagnes"
+                ],
+                "summary": "Fulltext search on all attribute of campagnes",
+                "description": "\nSearch ressources campagnes avec différents critères de recherche, pagination et des filtres sur les attributs.\n\nExemple avec des critères de pagination (count, start_index)\n\n\n  ```\n  curl -iX GET \\\n  -H 'Accept: application/json' \\\n  -H 'Authorization: eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJodHRwczovL2NsYXVkZS1pZHAubGFwb3N0ZS5mciIsInBybiI6ImNsYXVkZS5zZWd1cmV0QGxhcG9zdGUuZnIiLCJhdWQiOiJodHRwczovL2NsYXVkZS1hdXRoLmxhcG9zdGUuZnIiLCJleHAiOiIxNDYxNTYxNzIxIiwic2NvcGVzIjpbInJlc3NvdXJjZXMucmVhZCIsInJlc3NvdXJjZXMud3JpdGUiXX0.rn6BGkwXv1bqaevBuroqNoBDP6d8dNo3dN1f6kwPqNU' \\\n  \"http://localhost:1337/prestations/v1/campagnes/search?q=v*&start_index=1&count=10\"\n  ```\n\nExemple avec des critères de date\n\n\n  ```\n  curl -iX GET \\\n  -H 'Accept: application/json' \\\n  -H 'Authorization: eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJodHRwczovL2NsYXVkZS1pZHAubGFwb3N0ZS5mciIsInBybiI6ImNsYXVkZS5zZWd1cmV0QGxhcG9zdGUuZnIiLCJhdWQiOiJodHRwczovL2NsYXVkZS1hdXRoLmxhcG9zdGUuZnIiLCJleHAiOiIxNDYxNTYxNzIxIiwic2NvcGVzIjpbInJlc3NvdXJjZXMucmVhZCIsInJlc3NvdXJjZXMud3JpdGUiXX0.rn6BGkwXv1bqaevBuroqNoBDP6d8dNo3dN1f6kwPqNU' \\\n  \"http://localhost:1337/prestations/v1/campagnes/search?q=v*&creation_date_gte=2015-06-18T00:00:00Z\"\n  ```\n\nExemple avec des filtres sur les attributs retournés\n\n\n  ```\n  curl -iX GET \\\n  -H 'Accept: application/json' \\\n  -H 'Authorization: eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJodHRwczovL2NsYXVkZS1pZHAubGFwb3N0ZS5mciIsInBybiI6ImNsYXVkZS5zZWd1cmV0QGxhcG9zdGUuZnIiLCJhdWQiOiJodHRwczovL2NsYXVkZS1hdXRoLmxhcG9zdGUuZnIiLCJleHAiOiIxNDYxNTYxNzIxIiwic2NvcGVzIjpbInJlc3NvdXJjZXMucmVhZCIsInJlc3NvdXJjZXMud3JpdGUiXX0.rn6BGkwXv1bqaevBuroqNoBDP6d8dNo3dN1f6kwPqNU' \\\n  \"http://localhost:1337/prestations/v1/campagnes/search?q=v*&creation_date_gte=2015-06-18T00:00:00Z&fields=id,modification_date\"\n  ```\n",
+                "operationId": "searchCampagnes",
+                "produces": [
+                    "application/json"
+                ],
+                "parameters": [
+                    {
+                        "in": "query",
+                        "name": "q",
+                        "description": "champs de recherche fulltext\nEx ?q=recherh*\n",
+                        "required": false,
+                        "type": "string"
+                    },
+                    {
+                        "in": "query",
+                        "name": "fields",
+                        "description": "Listes des attributs à retourner (séparés par des virgules) Ex ?fields=id,creation_date\n",
+                        "required": false,
+                        "type": "string"
+                    },
+                    {
+                        "in": "query",
+                        "name": "start_index",
+                        "description": "Premier élément à retourner (commence à 1)",
+                        "default": 1,
+                        "required": false,
+                        "type": "integer",
+                        "format": "int64"
+                    },
+                    {
+                        "in": "query",
+                        "name": "count",
+                        "description": "Number of itemà récupérer (default 10, max 999)",
+                        "default": 20,
+                        "maximum": 999,
+                        "required": false,
+                        "type": "integer",
+                        "format": "int64"
+                    },
+                    {
+                        "in": "header",
+                        "name": "If-None-Match",
+                        "description": "Version de la ressource (voir etag) (Ex : 1)",
+                        "required": false,
+                        "type": "string"
+                    }
+                ],
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "successful operation",
+                        "schema": {
+                            "$ref": "#/definitions/PaginationCampagnes"
+                        }
+                    },
+                    "304": {
+                        "description": "not modified"
+                    },
+                    "400": {
+                        "description": "Bad request, parameters are not correct",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/Error"
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized, the authentification is invalid or missing"
+                    },
+                    "403": {
+                        "description": "Forbidden, permissions are insufficient"
+                    },
+                    "429": {
+                        "description": "Too many requests"
+                    },
+                    "500": {
+                        "description": "Internal server error"
+                    },
+                    "503": {
+                        "description": "Temporary unavailable",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/Error"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/tournees": {
+            "get": {
+                "tags": [
+                    "tournees"
+                ],
+                "summary": "Récupère une liste de ressource tournees",
+                "description": "\n\nRécupérer tournees avec différents critères de recherche, pagination et des filtres sur les attributs.\n\nExemple avec des critères de pagination (count, start_index)\n\n\n  ```\n  curl -iX GET \\\n  -H 'Accept: application/json' \\\n  -H 'Authorization: eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJodHRwczovL2NsYXVkZS1pZHAubGFwb3N0ZS5mciIsInBybiI6ImNsYXVkZS5zZWd1cmV0QGxhcG9zdGUuZnIiLCJhdWQiOiJodHRwczovL2NsYXVkZS1hdXRoLmxhcG9zdGUuZnIiLCJleHAiOiIxNDYxNTYxNzIxIiwic2NvcGVzIjpbInJlc3NvdXJjZXMucmVhZCIsInJlc3NvdXJjZXMud3JpdGUiXX0.rn6BGkwXv1bqaevBuroqNoBDP6d8dNo3dN1f6kwPqNU' \\\n  \"http://localhost:1337/prestations/v1/tournees?start_index=1&count=10\"\n  ```\n\nExemple avec des critères de date\n\n\n  ```\n  curl -iX GET \\\n  -H 'Accept: application/json' \\\n  -H 'Authorization: eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJodHRwczovL2NsYXVkZS1pZHAubGFwb3N0ZS5mciIsInBybiI6ImNsYXVkZS5zZWd1cmV0QGxhcG9zdGUuZnIiLCJhdWQiOiJodHRwczovL2NsYXVkZS1hdXRoLmxhcG9zdGUuZnIiLCJleHAiOiIxNDYxNTYxNzIxIiwic2NvcGVzIjpbInJlc3NvdXJjZXMucmVhZCIsInJlc3NvdXJjZXMud3JpdGUiXX0.rn6BGkwXv1bqaevBuroqNoBDP6d8dNo3dN1f6kwPqNU' \\\n  \"http://localhost:1337/prestations/v1/tournees?creation_date_gte=2015-06-18T00:00:00Z\"\n  ```\n\nExemple avec des filtres sur les attributs retournés\n\n\n  ```\n  curl -iX GET \\\n  -H 'Accept: application/json' \\\n  -H 'Authorization: eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJodHRwczovL2NsYXVkZS1pZHAubGFwb3N0ZS5mciIsInBybiI6ImNsYXVkZS5zZWd1cmV0QGxhcG9zdGUuZnIiLCJhdWQiOiJodHRwczovL2NsYXVkZS1hdXRoLmxhcG9zdGUuZnIiLCJleHAiOiIxNDYxNTYxNzIxIiwic2NvcGVzIjpbInJlc3NvdXJjZXMucmVhZCIsInJlc3NvdXJjZXMud3JpdGUiXX0.rn6BGkwXv1bqaevBuroqNoBDP6d8dNo3dN1f6kwPqNU' \\\n  \"http://localhost:1337/prestations/v1/tournees?creation_date_gte=2015-06-18T00:00:00Z&fields=id,modification_date\"\n  ```\n",
+                "operationId": "listTournees",
+                "produces": [
+                    "application/json"
+                ],
+                "parameters": [
+                    {
+                        "in": "query",
+                        "name": "fields",
+                        "description": "Listes des attributs à retourner (séparés par des virgules) Ex ?fields=id,creation_date\n",
+                        "required": false,
+                        "type": "string"
+                    },
+                    {
+                        "in": "query",
+                        "name": "start_index",
+                        "description": "Premier élément à retourner (commence à 1)",
+                        "required": false,
+                        "type": "integer",
+                        "format": "int64"
+                    },
+                    {
+                        "in": "query",
+                        "name": "count",
+                        "description": "Nombre d'éléments à retourner (par défaut 30, max 1000)",
+                        "maximum": 1000,
+                        "required": false,
+                        "type": "integer",
+                        "format": "int64"
+                    },
+                    {
+                        "in": "header",
+                        "name": "If-None-Match",
+                        "description": "Version de la ressource (voir etag) (Ex : 1)",
+                        "required": false,
+                        "type": "string"
+                    }
+                ],
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "successful operation",
+                        "schema": {
+                            "$ref": "#/definitions/PaginationTournees"
+                        }
+                    },
+                    "304": {
+                        "description": "not modified"
+                    },
+                    "400": {
+                        "description": "Bad request, parameters are not correct",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/Error"
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized, the authentification is invalid or missing"
+                    },
+                    "403": {
+                        "description": "Forbidden, permissions are insufficient"
+                    },
+                    "429": {
+                        "description": "Too many requests"
+                    },
+                    "500": {
+                        "description": "Internal server error"
+                    },
+                    "503": {
+                        "description": "Temporary unavailable",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/Error"
+                            }
+                        }
+                    }
+                }
+            },
+            "post": {
+                "tags": [
+                    "tournees"
+                ],
+                "summary": "Crée une ressource tournees",
+                "description": "Crée une ressource tournees\n\n\n  ```\n  curl -iX POST \\\n  -H 'Accept: application/json' \\\n  -H 'Content-Type: application/json; charset=utf-8' \\\n  -H 'Authorization: eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJodHRwczovL2NsYXVkZS1pZHAubGFwb3N0ZS5mciIsInBybiI6ImNsYXVkZS5zZWd1cmV0QGxhcG9zdGUuZnIiLCJhdWQiOiJodHRwczovL2NsYXVkZS1hdXRoLmxhcG9zdGUuZnIiLCJleHAiOiIxNDYxNTYxNzIxIiwic2NvcGVzIjpbInJlc3NvdXJjZXMucmVhZCIsInJlc3NvdXJjZXMud3JpdGUiXX0.rn6BGkwXv1bqaevBuroqNoBDP6d8dNo3dN1f6kwPqNU' \\\n  -d '{\"nom_tournee\":\"TP-0001\",\"id_agents\":\"pwyh295\",\"id_etablissements\":\"787120\",\"statut_tournee\":\"a_faire\",\"date_tournee\":\"2014-06-01T00:00:00Z\",\"creation_date\":\"2016-03-19T07:24:52Z\",\"modification_date\":\"2016-03-19T07:24:52Z\",\"etag\":1}' \\\n  'http://localhost:1337/prestations/v1/tournees'\n  ```\n",
+                "operationId": "createTournees",
+                "consumes": [
+                    "application/x-www-form-urlencoded"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ],
+                "parameters": [
+                    {
+                        "in": "body",
+                        "name": "body",
+                        "description": "ressource tournees",
+                        "required": false,
+                        "schema": {
+                            "$ref": "#/definitions/Tournees"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/Tournees"
+                        }
+                    },
+                    "304": {
+                        "description": "not modified"
+                    },
+                    "400": {
+                        "description": "Bad request, parameters are not correct",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/Error"
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized, the authentification is invalid or missing"
+                    },
+                    "403": {
+                        "description": "Forbidden, permissions are insufficient"
+                    },
+                    "404": {
+                        "description": "Not found"
+                    },
+                    "412": {
+                        "description": "Precondition failed, versions conflit"
+                    },
+                    "429": {
+                        "description": "Too many requests"
+                    },
+                    "500": {
+                        "description": "Internal server error"
+                    },
+                    "503": {
+                        "description": "Temporary unavailable",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/Error"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/tournees/{id}": {
+            "get": {
+                "tags": [
+                    "tournees"
+                ],
+                "summary": "Récupère une ressource tournees",
+                "description": "\nRécupère la ressourcetournees `davute079EkVkC1Uax` avec des filtres sur les attributs\n\n  ```\n  curl -iX GET \\\n  -H 'Accept: application/json' \\\n  -H 'Authorization: eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJodHRwczovL2NsYXVkZS1pZHAubGFwb3N0ZS5mciIsInBybiI6ImNsYXVkZS5zZWd1cmV0QGxhcG9zdGUuZnIiLCJhdWQiOiJodHRwczovL2NsYXVkZS1hdXRoLmxhcG9zdGUuZnIiLCJleHAiOiIxNDYxNTYxNzIxIiwic2NvcGVzIjpbInJlc3NvdXJjZXMucmVhZCIsInJlc3NvdXJjZXMud3JpdGUiXX0.rn6BGkwXv1bqaevBuroqNoBDP6d8dNo3dN1f6kwPqNU' \\\n  -H \"If-None-Match: 1\" \\\n  \"http://localhost:1337/prestations/v1/tournees/davute079EkVkC1Uax?fields=id,creation_date,modification_date\"\n  ```\n",
+                "operationId": "getOneTournees",
+                "produces": [
+                    "application/json"
+                ],
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "id",
+                        "description": "identifiant unique de la ressource tourneesà récupérer (Ex: davute079EkVkC1Uax)",
+                        "required": true,
+                        "type": "string"
+                    },
+                    {
+                        "in": "query",
+                        "name": "fields",
+                        "description": "Listes des attributs à retourner (séparés par des virgules) (Ex : ?fields=id,creation_date)",
+                        "required": false,
+                        "type": "string"
+                    },
+                    {
+                        "in": "header",
+                        "name": "If-None-Match",
+                        "description": "Version de la ressource (voir etag) (Ex : 1)",
+                        "required": false,
+                        "type": "string"
+                    }
+                ],
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "successful operation",
+                        "schema": {
+                            "$ref": "#/definitions/Tournees"
+                        }
+                    },
+                    "304": {
+                        "description": "not modified"
+                    },
+                    "400": {
+                        "description": "Bad request, parameters are not correct",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/Error"
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized, the authentification is invalid or missing"
+                    },
+                    "403": {
+                        "description": "Forbidden, permissions are insufficient"
+                    },
+                    "404": {
+                        "description": "Not found"
+                    },
+                    "429": {
+                        "description": "Too many requests"
+                    },
+                    "500": {
+                        "description": "Internal server error"
+                    },
+                    "503": {
+                        "description": "Temporary unavailable",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/Error"
+                            }
+                        }
+                    }
+                }
+            },
+            "put": {
+                "tags": [
+                    "tournees"
+                ],
+                "summary": "Mise à jour complète (tous les arttributs)tournees",
+                "description": "\nFull update the ressource tournees `davute079EkVkC1Uax`\n\n\n  ```\n  curl -iX PUT \\\n  -H 'Accept: application/json' \\\n  -H 'Content-Type: application/json; charset=utf-8' \\\n  -H 'Authorization: eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJodHRwczovL2NsYXVkZS1pZHAubGFwb3N0ZS5mciIsInBybiI6ImNsYXVkZS5zZWd1cmV0QGxhcG9zdGUuZnIiLCJhdWQiOiJodHRwczovL2NsYXVkZS1hdXRoLmxhcG9zdGUuZnIiLCJleHAiOiIxNDYxNTYxNzIxIiwic2NvcGVzIjpbInJlc3NvdXJjZXMucmVhZCIsInJlc3NvdXJjZXMud3JpdGUiXX0.rn6BGkwXv1bqaevBuroqNoBDP6d8dNo3dN1f6kwPqNU' \\\n  -d '{\"nom_tournee\":\"TP-0001\",\"id_agents\":\"pwyh295\",\"id_etablissements\":\"787120\",\"statut_tournee\":\"a_faire\",\"date_tournee\":\"2014-06-01T00:00:00Z\",\"creation_date\":\"2016-03-19T07:24:52Z\",\"modification_date\":\"2016-03-19T07:24:52Z\",\"etag\":1}' \\\n  \"http://localhost:1337/prestations/v1/tournees/davute079EkVkC1Uax\"\n  ```\n",
+                "operationId": "fullUpdateOneTournees",
+                "consumes": [
+                    "application/x-www-form-urlencoded"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ],
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "id",
+                        "description": "identifiant unique de la ressource tournees à mettre à jour (Ex: davute079EkVkC1Uax)",
+                        "required": true,
+                        "type": "string"
+                    },
+                    {
+                        "in": "body",
+                        "name": "body",
+                        "description": "ressource tournees",
+                        "required": false,
+                        "schema": {
+                            "$ref": "#/definitions/Tournees"
+                        }
+                    },
+                    {
+                        "in": "header",
+                        "name": "If-None-Match",
+                        "description": "Version de la ressource (voir etag) (Ex : 1)",
+                        "required": false,
+                        "type": "string"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Successful operation",
+                        "schema": {
+                            "$ref": "#/definitions/Tournees"
+                        }
+                    },
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/Tournees"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad request, parameters are not correct",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/Error"
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized, the authentification is invalid or missing"
+                    },
+                    "403": {
+                        "description": "Forbidden, permissions are insufficient"
+                    },
+                    "412": {
+                        "description": "Precondition failed, versions conflit"
+                    },
+                    "429": {
+                        "description": "Too many requests"
+                    },
+                    "500": {
+                        "description": "Internal server error"
+                    },
+                    "503": {
+                        "description": "Temporary unavailable",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/Error"
+                            }
+                        }
+                    }
+                }
+            },
+            "post": {
+                "tags": [
+                    "tournees"
+                ],
+                "summary": "mise à jour partielle (un ou plusieurs attributs) d'une ressource tournees",
+                "description": "Mise à jour partielle  de la ressourcetournees `davute079EkVkC1Uax`\n\n\n  ```\n  curl -iX POST \\\n  -H 'Accept: application/json' \\\n  -H 'Content-Type: application/json; charset=utf-8' \\\n  -H 'Authorization: eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJodHRwczovL2NsYXVkZS1pZHAubGFwb3N0ZS5mciIsInBybiI6ImNsYXVkZS5zZWd1cmV0QGxhcG9zdGUuZnIiLCJhdWQiOiJodHRwczovL2NsYXVkZS1hdXRoLmxhcG9zdGUuZnIiLCJleHAiOiIxNDYxNTYxNzIxIiwic2NvcGVzIjpbInJlc3NvdXJjZXMucmVhZCIsInJlc3NvdXJjZXMud3JpdGUiXX0.rn6BGkwXv1bqaevBuroqNoBDP6d8dNo3dN1f6kwPqNU' \\\n  -d '{\"nom_tournee\":\"TP-0001\",\"id_agents\":\"pwyh295\",\"id_etablissements\":\"787120\",\"statut_tournee\":\"a_faire\",\"date_tournee\":\"2014-06-01T00:00:00Z\",\"creation_date\":\"2016-03-19T07:24:52Z\",\"modification_date\":\"2016-03-19T07:24:52Z\",\"etag\":1}' \\\n  \"http://localhost:1337/prestations/v1/tournees/davute079EkVkC1Uax\"\n  ```\n",
+                "operationId": "partialUpdateTournees",
+                "consumes": [
+                    "application/x-www-form-urlencoded"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ],
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "id",
+                        "description": "identifiant unique de la ressource tournees à mettre à jour (Ex: davute079EkVkC1Uax)",
+                        "required": true,
+                        "type": "string"
+                    },
+                    {
+                        "in": "body",
+                        "name": "body",
+                        "description": "ressource tournees",
+                        "required": false,
+                        "schema": {
+                            "$ref": "#/definitions/Tournees"
+                        }
+                    },
+                    {
+                        "in": "header",
+                        "name": "If-None-Match",
+                        "description": "Version de la ressource (voir etag) (Ex : 1)",
+                        "required": false,
+                        "type": "string"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "successful operation",
+                        "schema": {
+                            "$ref": "#/definitions/Tournees"
+                        }
+                    },
+                    "304": {
+                        "description": "not modified"
+                    },
+                    "400": {
+                        "description": "Bad request, parameters are not correct",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/Error"
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized, the authentification is invalid or missing"
+                    },
+                    "403": {
+                        "description": "Forbidden, permissions are insufficient"
+                    },
+                    "404": {
+                        "description": "Not found"
+                    },
+                    "412": {
+                        "description": "Precondition failed, versions conflit"
+                    },
+                    "429": {
+                        "description": "Too many requests"
+                    },
+                    "500": {
+                        "description": "Internal server error"
+                    },
+                    "503": {
+                        "description": "Temporary unavailable",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/Error"
+                            }
+                        }
+                    }
+                }
+            },
+            "patch": {
+                "tags": [
+                    "tournees"
+                ],
+                "summary": "mise à jour partielle (un ou plusieurs attributs) d'une ressource tournees",
+                "description": "Mise à jour partielle  de la ressourcetournees `davute079EkVkC1Uax`\n\n\n  ```\n  curl -iX PATCH \\\n  -H 'Accept: application/json' \\\n  -H 'Content-Type: application/json; charset=utf-8' \\\n  -H 'Authorization: eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJodHRwczovL2NsYXVkZS1pZHAubGFwb3N0ZS5mciIsInBybiI6ImNsYXVkZS5zZWd1cmV0QGxhcG9zdGUuZnIiLCJhdWQiOiJodHRwczovL2NsYXVkZS1hdXRoLmxhcG9zdGUuZnIiLCJleHAiOiIxNDYxNTYxNzIxIiwic2NvcGVzIjpbInJlc3NvdXJjZXMucmVhZCIsInJlc3NvdXJjZXMud3JpdGUiXX0.rn6BGkwXv1bqaevBuroqNoBDP6d8dNo3dN1f6kwPqNU' \\\n  -d '{\"nom_tournee\":\"TP-0001\",\"id_agents\":\"pwyh295\",\"id_etablissements\":\"787120\",\"statut_tournee\":\"a_faire\",\"date_tournee\":\"2014-06-01T00:00:00Z\",\"creation_date\":\"2016-03-19T07:24:52Z\",\"modification_date\":\"2016-03-19T07:24:52Z\",\"etag\":1}' \\\n  \"http://localhost:1337/prestations/v1/tournees/davute079EkVkC1Uax\"\n  ```\n",
+                "operationId": "patchTournees",
+                "consumes": [
+                    "application/x-www-form-urlencoded"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ],
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "id",
+                        "description": "identifiant unique de la ressource tournees à mettre à jour (Ex: davute079EkVkC1Uax)",
+                        "required": true,
+                        "type": "string"
+                    },
+                    {
+                        "in": "body",
+                        "name": "body",
+                        "description": "ressource tournees",
+                        "required": false,
+                        "schema": {
+                            "$ref": "#/definitions/Tournees"
+                        }
+                    },
+                    {
+                        "in": "header",
+                        "name": "If-None-Match",
+                        "description": "Version de la ressource (voir etag) (Ex : 1)",
+                        "required": false,
+                        "type": "string"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "successful operation",
+                        "schema": {
+                            "$ref": "#/definitions/Tournees"
+                        }
+                    },
+                    "304": {
+                        "description": "not modified"
+                    },
+                    "400": {
+                        "description": "Bad request, parameters are not correct",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/Error"
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized, the authentification is invalid or missing"
+                    },
+                    "403": {
+                        "description": "Forbidden, permissions are insufficient"
+                    },
+                    "404": {
+                        "description": "Not found"
+                    },
+                    "412": {
+                        "description": "Precondition failed, versions conflit"
+                    },
+                    "429": {
+                        "description": "Too many requests"
+                    },
+                    "500": {
+                        "description": "Internal server error"
+                    },
+                    "503": {
+                        "description": "Temporary unavailable",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/Error"
+                            }
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "tags": [
+                    "tournees"
+                ],
+                "summary": "Supprime une ressourcetournees",
+                "description": "Supprime la ressource tournees `davute079EkVkC1Uax`\n\n\n  ```\n  curl -iX DELETE \\\n  -H 'Accept: application/json' \\\n  -H 'Authorization: eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJodHRwczovL2NsYXVkZS1pZHAubGFwb3N0ZS5mciIsInBybiI6ImNsYXVkZS5zZWd1cmV0QGxhcG9zdGUuZnIiLCJhdWQiOiJodHRwczovL2NsYXVkZS1hdXRoLmxhcG9zdGUuZnIiLCJleHAiOiIxNDYxNTYxNzIxIiwic2NvcGVzIjpbInJlc3NvdXJjZXMucmVhZCIsInJlc3NvdXJjZXMud3JpdGUiXX0.rn6BGkwXv1bqaevBuroqNoBDP6d8dNo3dN1f6kwPqNU' \\\n  \"http://localhost:1337/prestations/v1/tournees/davute079EkVkC1Uax\"\n  ```\n",
+                "operationId": "deleteOneTournees",
+                "produces": [
+                    "application/json"
+                ],
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ],
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "id",
+                        "description": "identifiant unique de la ressource tournees à supprimer (Ex: davute079EkVkC1Uax)",
+                        "required": true,
+                        "type": "string"
+                    },
+                    {
+                        "in": "header",
+                        "name": "If-None-Match",
+                        "description": "Version de la ressource (voir etag) (Ex : 1)",
+                        "required": false,
+                        "type": "string"
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "Deleted"
+                    },
+                    "401": {
+                        "description": "Unauthorized, the authentification is invalid or missing"
+                    },
+                    "403": {
+                        "description": "Forbidden, permissions are insufficient"
+                    },
+                    "404": {
+                        "description": "Not found"
+                    },
+                    "429": {
+                        "description": "Too many requests"
+                    },
+                    "500": {
+                        "description": "Internal server error"
+                    },
+                    "503": {
+                        "description": "Temporary unavailable",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/Error"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/tournees/search": {
+            "get": {
+                "tags": [
+                    "tournees"
+                ],
+                "summary": "Fulltext search on all attribute of tournees",
+                "description": "\nSearch ressources tournees avec différents critères de recherche, pagination et des filtres sur les attributs.\n\nExemple avec des critères de pagination (count, start_index)\n\n\n  ```\n  curl -iX GET \\\n  -H 'Accept: application/json' \\\n  -H 'Authorization: eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJodHRwczovL2NsYXVkZS1pZHAubGFwb3N0ZS5mciIsInBybiI6ImNsYXVkZS5zZWd1cmV0QGxhcG9zdGUuZnIiLCJhdWQiOiJodHRwczovL2NsYXVkZS1hdXRoLmxhcG9zdGUuZnIiLCJleHAiOiIxNDYxNTYxNzIxIiwic2NvcGVzIjpbInJlc3NvdXJjZXMucmVhZCIsInJlc3NvdXJjZXMud3JpdGUiXX0.rn6BGkwXv1bqaevBuroqNoBDP6d8dNo3dN1f6kwPqNU' \\\n  \"http://localhost:1337/prestations/v1/tournees/search?q=v*&start_index=1&count=10\"\n  ```\n\nExemple avec des critères de date\n\n\n  ```\n  curl -iX GET \\\n  -H 'Accept: application/json' \\\n  -H 'Authorization: eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJodHRwczovL2NsYXVkZS1pZHAubGFwb3N0ZS5mciIsInBybiI6ImNsYXVkZS5zZWd1cmV0QGxhcG9zdGUuZnIiLCJhdWQiOiJodHRwczovL2NsYXVkZS1hdXRoLmxhcG9zdGUuZnIiLCJleHAiOiIxNDYxNTYxNzIxIiwic2NvcGVzIjpbInJlc3NvdXJjZXMucmVhZCIsInJlc3NvdXJjZXMud3JpdGUiXX0.rn6BGkwXv1bqaevBuroqNoBDP6d8dNo3dN1f6kwPqNU' \\\n  \"http://localhost:1337/prestations/v1/tournees/search?q=v*&creation_date_gte=2015-06-18T00:00:00Z\"\n  ```\n\nExemple avec des filtres sur les attributs retournés\n\n\n  ```\n  curl -iX GET \\\n  -H 'Accept: application/json' \\\n  -H 'Authorization: eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJodHRwczovL2NsYXVkZS1pZHAubGFwb3N0ZS5mciIsInBybiI6ImNsYXVkZS5zZWd1cmV0QGxhcG9zdGUuZnIiLCJhdWQiOiJodHRwczovL2NsYXVkZS1hdXRoLmxhcG9zdGUuZnIiLCJleHAiOiIxNDYxNTYxNzIxIiwic2NvcGVzIjpbInJlc3NvdXJjZXMucmVhZCIsInJlc3NvdXJjZXMud3JpdGUiXX0.rn6BGkwXv1bqaevBuroqNoBDP6d8dNo3dN1f6kwPqNU' \\\n  \"http://localhost:1337/prestations/v1/tournees/search?q=v*&creation_date_gte=2015-06-18T00:00:00Z&fields=id,modification_date\"\n  ```\n",
+                "operationId": "searchTournees",
+                "produces": [
+                    "application/json"
+                ],
+                "parameters": [
+                    {
+                        "in": "query",
+                        "name": "q",
+                        "description": "champs de recherche fulltext\nEx ?q=recherh*\n",
+                        "required": false,
+                        "type": "string"
+                    },
+                    {
+                        "in": "query",
+                        "name": "fields",
+                        "description": "Listes des attributs à retourner (séparés par des virgules) Ex ?fields=id,creation_date\n",
+                        "required": false,
+                        "type": "string"
+                    },
+                    {
+                        "in": "query",
+                        "name": "start_index",
+                        "description": "Premier élément à retourner (commence à 1)",
+                        "default": 1,
+                        "required": false,
+                        "type": "integer",
+                        "format": "int64"
+                    },
+                    {
+                        "in": "query",
+                        "name": "count",
+                        "description": "Number of itemà récupérer (default 10, max 999)",
+                        "default": 20,
+                        "maximum": 999,
+                        "required": false,
+                        "type": "integer",
+                        "format": "int64"
+                    },
+                    {
+                        "in": "header",
+                        "name": "If-None-Match",
+                        "description": "Version de la ressource (voir etag) (Ex : 1)",
+                        "required": false,
+                        "type": "string"
+                    }
+                ],
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "successful operation",
+                        "schema": {
+                            "$ref": "#/definitions/PaginationTournees"
+                        }
+                    },
+                    "304": {
+                        "description": "not modified"
+                    },
+                    "400": {
+                        "description": "Bad request, parameters are not correct",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/Error"
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized, the authentification is invalid or missing"
+                    },
+                    "403": {
+                        "description": "Forbidden, permissions are insufficient"
+                    },
+                    "429": {
+                        "description": "Too many requests"
+                    },
+                    "500": {
+                        "description": "Internal server error"
+                    },
+                    "503": {
+                        "description": "Temporary unavailable",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/Error"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/prestations_evenements": {
+            "get": {
+                "tags": [
+                    "prestations_evenements"
+                ],
+                "summary": "Récupère une liste de ressource prestations_evenements",
+                "description": "\n\nRécupérer prestations_evenements avec différents critères de recherche, pagination et des filtres sur les attributs.\n\nExemple avec des critères de pagination (count, start_index)\n\n\n  ```\n  curl -iX GET \\\n  -H 'Accept: application/json' \\\n  -H 'Authorization: eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJodHRwczovL2NsYXVkZS1pZHAubGFwb3N0ZS5mciIsInBybiI6ImNsYXVkZS5zZWd1cmV0QGxhcG9zdGUuZnIiLCJhdWQiOiJodHRwczovL2NsYXVkZS1hdXRoLmxhcG9zdGUuZnIiLCJleHAiOiIxNDYxNTYxNzIxIiwic2NvcGVzIjpbInJlc3NvdXJjZXMucmVhZCIsInJlc3NvdXJjZXMud3JpdGUiXX0.rn6BGkwXv1bqaevBuroqNoBDP6d8dNo3dN1f6kwPqNU' \\\n  \"http://localhost:1337/prestations/v1/prestations_evenements?start_index=1&count=10\"\n  ```\n\nExemple avec des critères de date\n\n\n  ```\n  curl -iX GET \\\n  -H 'Accept: application/json' \\\n  -H 'Authorization: eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJodHRwczovL2NsYXVkZS1pZHAubGFwb3N0ZS5mciIsInBybiI6ImNsYXVkZS5zZWd1cmV0QGxhcG9zdGUuZnIiLCJhdWQiOiJodHRwczovL2NsYXVkZS1hdXRoLmxhcG9zdGUuZnIiLCJleHAiOiIxNDYxNTYxNzIxIiwic2NvcGVzIjpbInJlc3NvdXJjZXMucmVhZCIsInJlc3NvdXJjZXMud3JpdGUiXX0.rn6BGkwXv1bqaevBuroqNoBDP6d8dNo3dN1f6kwPqNU' \\\n  \"http://localhost:1337/prestations/v1/prestations_evenements?creation_date_gte=2015-06-18T00:00:00Z\"\n  ```\n\nExemple avec des filtres sur les attributs retournés\n\n\n  ```\n  curl -iX GET \\\n  -H 'Accept: application/json' \\\n  -H 'Authorization: eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJodHRwczovL2NsYXVkZS1pZHAubGFwb3N0ZS5mciIsInBybiI6ImNsYXVkZS5zZWd1cmV0QGxhcG9zdGUuZnIiLCJhdWQiOiJodHRwczovL2NsYXVkZS1hdXRoLmxhcG9zdGUuZnIiLCJleHAiOiIxNDYxNTYxNzIxIiwic2NvcGVzIjpbInJlc3NvdXJjZXMucmVhZCIsInJlc3NvdXJjZXMud3JpdGUiXX0.rn6BGkwXv1bqaevBuroqNoBDP6d8dNo3dN1f6kwPqNU' \\\n  \"http://localhost:1337/prestations/v1/prestations_evenements?creation_date_gte=2015-06-18T00:00:00Z&fields=id,modification_date\"\n  ```\n",
+                "operationId": "listPrestations_evenements",
+                "produces": [
+                    "application/json"
+                ],
+                "parameters": [
+                    {
+                        "in": "query",
+                        "name": "fields",
+                        "description": "Listes des attributs à retourner (séparés par des virgules) Ex ?fields=id,creation_date\n",
+                        "required": false,
+                        "type": "string"
+                    },
+                    {
+                        "in": "query",
+                        "name": "start_index",
+                        "description": "Premier élément à retourner (commence à 1)",
+                        "required": false,
+                        "type": "integer",
+                        "format": "int64"
+                    },
+                    {
+                        "in": "query",
+                        "name": "count",
+                        "description": "Nombre d'éléments à retourner (par défaut 30, max 1000)",
+                        "maximum": 1000,
+                        "required": false,
+                        "type": "integer",
+                        "format": "int64"
+                    },
+                    {
+                        "in": "header",
+                        "name": "If-None-Match",
+                        "description": "Version de la ressource (voir etag) (Ex : 1)",
+                        "required": false,
+                        "type": "string"
+                    }
+                ],
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "successful operation",
+                        "schema": {
+                            "$ref": "#/definitions/PaginationPrestations_evenements"
+                        }
+                    },
+                    "304": {
+                        "description": "not modified"
+                    },
+                    "400": {
+                        "description": "Bad request, parameters are not correct",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/Error"
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized, the authentification is invalid or missing"
+                    },
+                    "403": {
+                        "description": "Forbidden, permissions are insufficient"
+                    },
+                    "429": {
+                        "description": "Too many requests"
+                    },
+                    "500": {
+                        "description": "Internal server error"
+                    },
+                    "503": {
+                        "description": "Temporary unavailable",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/Error"
+                            }
+                        }
+                    }
+                }
+            },
+            "post": {
+                "tags": [
+                    "prestations_evenements"
+                ],
+                "summary": "Crée une ressource prestations_evenements",
+                "description": "Crée une ressource prestations_evenements\n\n\n  ```\n  curl -iX POST \\\n  -H 'Accept: application/json' \\\n  -H 'Content-Type: application/json; charset=utf-8' \\\n  -H 'Authorization: eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJodHRwczovL2NsYXVkZS1pZHAubGFwb3N0ZS5mciIsInBybiI6ImNsYXVkZS5zZWd1cmV0QGxhcG9zdGUuZnIiLCJhdWQiOiJodHRwczovL2NsYXVkZS1hdXRoLmxhcG9zdGUuZnIiLCJleHAiOiIxNDYxNTYxNzIxIiwic2NvcGVzIjpbInJlc3NvdXJjZXMucmVhZCIsInJlc3NvdXJjZXMud3JpdGUiXX0.rn6BGkwXv1bqaevBuroqNoBDP6d8dNo3dN1f6kwPqNU' \\\n  -d '{\"id_prestations\":\"idprabe469acdb35\",\"id_utilisateurs\":\"pwyh295\",\"detail\":\"Replanification par le mobile\",\"type\":\"replanification_mobile\",\"creation_date\":\"2016-03-19T06:59:44Z\",\"modification_date\":\"2016-03-19T06:59:44Z\",\"etag\":1}' \\\n  'http://localhost:1337/prestations/v1/prestations_evenements'\n  ```\n",
+                "operationId": "createPrestations_evenements",
+                "consumes": [
+                    "application/x-www-form-urlencoded"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ],
+                "parameters": [
+                    {
+                        "in": "body",
+                        "name": "body",
+                        "description": "ressource prestations_evenements",
+                        "required": false,
+                        "schema": {
+                            "$ref": "#/definitions/Prestations_evenements"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/Prestations_evenements"
+                        }
+                    },
+                    "304": {
+                        "description": "not modified"
+                    },
+                    "400": {
+                        "description": "Bad request, parameters are not correct",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/Error"
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized, the authentification is invalid or missing"
+                    },
+                    "403": {
+                        "description": "Forbidden, permissions are insufficient"
+                    },
+                    "404": {
+                        "description": "Not found"
+                    },
+                    "412": {
+                        "description": "Precondition failed, versions conflit"
+                    },
+                    "429": {
+                        "description": "Too many requests"
+                    },
+                    "500": {
+                        "description": "Internal server error"
+                    },
+                    "503": {
+                        "description": "Temporary unavailable",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/Error"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/prestations_evenements/{id}": {
+            "get": {
+                "tags": [
+                    "prestations_evenements"
+                ],
+                "summary": "Récupère une ressource prestations_evenements",
+                "description": "\nRécupère la ressourceprestations_evenements `bamecu013EJZbOJIpe` avec des filtres sur les attributs\n\n  ```\n  curl -iX GET \\\n  -H 'Accept: application/json' \\\n  -H 'Authorization: eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJodHRwczovL2NsYXVkZS1pZHAubGFwb3N0ZS5mciIsInBybiI6ImNsYXVkZS5zZWd1cmV0QGxhcG9zdGUuZnIiLCJhdWQiOiJodHRwczovL2NsYXVkZS1hdXRoLmxhcG9zdGUuZnIiLCJleHAiOiIxNDYxNTYxNzIxIiwic2NvcGVzIjpbInJlc3NvdXJjZXMucmVhZCIsInJlc3NvdXJjZXMud3JpdGUiXX0.rn6BGkwXv1bqaevBuroqNoBDP6d8dNo3dN1f6kwPqNU' \\\n  -H \"If-None-Match: 1\" \\\n  \"http://localhost:1337/prestations/v1/prestations_evenements/bamecu013EJZbOJIpe?fields=id,creation_date,modification_date\"\n  ```\n",
+                "operationId": "getOnePrestations_evenements",
+                "produces": [
+                    "application/json"
+                ],
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "id",
+                        "description": "identifiant unique de la ressource prestations_evenementsà récupérer (Ex: bamecu013EJZbOJIpe)",
+                        "required": true,
+                        "type": "string"
+                    },
+                    {
+                        "in": "query",
+                        "name": "fields",
+                        "description": "Listes des attributs à retourner (séparés par des virgules) (Ex : ?fields=id,creation_date)",
+                        "required": false,
+                        "type": "string"
+                    },
+                    {
+                        "in": "header",
+                        "name": "If-None-Match",
+                        "description": "Version de la ressource (voir etag) (Ex : 1)",
+                        "required": false,
+                        "type": "string"
+                    }
+                ],
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "successful operation",
+                        "schema": {
+                            "$ref": "#/definitions/Prestations_evenements"
+                        }
+                    },
+                    "304": {
+                        "description": "not modified"
+                    },
+                    "400": {
+                        "description": "Bad request, parameters are not correct",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/Error"
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized, the authentification is invalid or missing"
+                    },
+                    "403": {
+                        "description": "Forbidden, permissions are insufficient"
+                    },
+                    "404": {
+                        "description": "Not found"
+                    },
+                    "429": {
+                        "description": "Too many requests"
+                    },
+                    "500": {
+                        "description": "Internal server error"
+                    },
+                    "503": {
+                        "description": "Temporary unavailable",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/Error"
+                            }
+                        }
+                    }
+                }
+            },
+            "put": {
+                "tags": [
+                    "prestations_evenements"
+                ],
+                "summary": "Mise à jour complète (tous les arttributs)prestations_evenements",
+                "description": "\nFull update the ressource prestations_evenements `bamecu013EJZbOJIpe`\n\n\n  ```\n  curl -iX PUT \\\n  -H 'Accept: application/json' \\\n  -H 'Content-Type: application/json; charset=utf-8' \\\n  -H 'Authorization: eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJodHRwczovL2NsYXVkZS1pZHAubGFwb3N0ZS5mciIsInBybiI6ImNsYXVkZS5zZWd1cmV0QGxhcG9zdGUuZnIiLCJhdWQiOiJodHRwczovL2NsYXVkZS1hdXRoLmxhcG9zdGUuZnIiLCJleHAiOiIxNDYxNTYxNzIxIiwic2NvcGVzIjpbInJlc3NvdXJjZXMucmVhZCIsInJlc3NvdXJjZXMud3JpdGUiXX0.rn6BGkwXv1bqaevBuroqNoBDP6d8dNo3dN1f6kwPqNU' \\\n  -d '{\"id_prestations\":\"idprabe469acdb35\",\"id_utilisateurs\":\"pwyh295\",\"detail\":\"Replanification par le mobile\",\"type\":\"replanification_mobile\",\"creation_date\":\"2016-03-19T06:59:44Z\",\"modification_date\":\"2016-03-19T06:59:44Z\",\"etag\":1}' \\\n  \"http://localhost:1337/prestations/v1/prestations_evenements/bamecu013EJZbOJIpe\"\n  ```\n",
+                "operationId": "fullUpdateOnePrestations_evenements",
+                "consumes": [
+                    "application/x-www-form-urlencoded"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ],
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "id",
+                        "description": "identifiant unique de la ressource prestations_evenements à mettre à jour (Ex: bamecu013EJZbOJIpe)",
+                        "required": true,
+                        "type": "string"
+                    },
+                    {
+                        "in": "body",
+                        "name": "body",
+                        "description": "ressource prestations_evenements",
+                        "required": false,
+                        "schema": {
+                            "$ref": "#/definitions/Prestations_evenements"
+                        }
+                    },
+                    {
+                        "in": "header",
+                        "name": "If-None-Match",
+                        "description": "Version de la ressource (voir etag) (Ex : 1)",
+                        "required": false,
+                        "type": "string"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Successful operation",
+                        "schema": {
+                            "$ref": "#/definitions/Prestations_evenements"
+                        }
+                    },
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/Prestations_evenements"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad request, parameters are not correct",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/Error"
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized, the authentification is invalid or missing"
+                    },
+                    "403": {
+                        "description": "Forbidden, permissions are insufficient"
+                    },
+                    "412": {
+                        "description": "Precondition failed, versions conflit"
+                    },
+                    "429": {
+                        "description": "Too many requests"
+                    },
+                    "500": {
+                        "description": "Internal server error"
+                    },
+                    "503": {
+                        "description": "Temporary unavailable",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/Error"
+                            }
+                        }
+                    }
+                }
+            },
+            "post": {
+                "tags": [
+                    "prestations_evenements"
+                ],
+                "summary": "mise à jour partielle (un ou plusieurs attributs) d'une ressource prestations_evenements",
+                "description": "Mise à jour partielle  de la ressourceprestations_evenements `bamecu013EJZbOJIpe`\n\n\n  ```\n  curl -iX POST \\\n  -H 'Accept: application/json' \\\n  -H 'Content-Type: application/json; charset=utf-8' \\\n  -H 'Authorization: eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJodHRwczovL2NsYXVkZS1pZHAubGFwb3N0ZS5mciIsInBybiI6ImNsYXVkZS5zZWd1cmV0QGxhcG9zdGUuZnIiLCJhdWQiOiJodHRwczovL2NsYXVkZS1hdXRoLmxhcG9zdGUuZnIiLCJleHAiOiIxNDYxNTYxNzIxIiwic2NvcGVzIjpbInJlc3NvdXJjZXMucmVhZCIsInJlc3NvdXJjZXMud3JpdGUiXX0.rn6BGkwXv1bqaevBuroqNoBDP6d8dNo3dN1f6kwPqNU' \\\n  -d '{\"id_prestations\":\"idprabe469acdb35\",\"id_utilisateurs\":\"pwyh295\",\"detail\":\"Replanification par le mobile\",\"type\":\"replanification_mobile\",\"creation_date\":\"2016-03-19T06:59:44Z\",\"modification_date\":\"2016-03-19T06:59:44Z\",\"etag\":1}' \\\n  \"http://localhost:1337/prestations/v1/prestations_evenements/bamecu013EJZbOJIpe\"\n  ```\n",
+                "operationId": "partialUpdatePrestations_evenements",
+                "consumes": [
+                    "application/x-www-form-urlencoded"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ],
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "id",
+                        "description": "identifiant unique de la ressource prestations_evenements à mettre à jour (Ex: bamecu013EJZbOJIpe)",
+                        "required": true,
+                        "type": "string"
+                    },
+                    {
+                        "in": "body",
+                        "name": "body",
+                        "description": "ressource prestations_evenements",
+                        "required": false,
+                        "schema": {
+                            "$ref": "#/definitions/Prestations_evenements"
+                        }
+                    },
+                    {
+                        "in": "header",
+                        "name": "If-None-Match",
+                        "description": "Version de la ressource (voir etag) (Ex : 1)",
+                        "required": false,
+                        "type": "string"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "successful operation",
+                        "schema": {
+                            "$ref": "#/definitions/Prestations_evenements"
+                        }
+                    },
+                    "304": {
+                        "description": "not modified"
+                    },
+                    "400": {
+                        "description": "Bad request, parameters are not correct",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/Error"
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized, the authentification is invalid or missing"
+                    },
+                    "403": {
+                        "description": "Forbidden, permissions are insufficient"
+                    },
+                    "404": {
+                        "description": "Not found"
+                    },
+                    "412": {
+                        "description": "Precondition failed, versions conflit"
+                    },
+                    "429": {
+                        "description": "Too many requests"
+                    },
+                    "500": {
+                        "description": "Internal server error"
+                    },
+                    "503": {
+                        "description": "Temporary unavailable",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/Error"
+                            }
+                        }
+                    }
+                }
+            },
+            "patch": {
+                "tags": [
+                    "prestations_evenements"
+                ],
+                "summary": "mise à jour partielle (un ou plusieurs attributs) d'une ressource prestations_evenements",
+                "description": "Mise à jour partielle  de la ressourceprestations_evenements `bamecu013EJZbOJIpe`\n\n\n  ```\n  curl -iX PATCH \\\n  -H 'Accept: application/json' \\\n  -H 'Content-Type: application/json; charset=utf-8' \\\n  -H 'Authorization: eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJodHRwczovL2NsYXVkZS1pZHAubGFwb3N0ZS5mciIsInBybiI6ImNsYXVkZS5zZWd1cmV0QGxhcG9zdGUuZnIiLCJhdWQiOiJodHRwczovL2NsYXVkZS1hdXRoLmxhcG9zdGUuZnIiLCJleHAiOiIxNDYxNTYxNzIxIiwic2NvcGVzIjpbInJlc3NvdXJjZXMucmVhZCIsInJlc3NvdXJjZXMud3JpdGUiXX0.rn6BGkwXv1bqaevBuroqNoBDP6d8dNo3dN1f6kwPqNU' \\\n  -d '{\"id_prestations\":\"idprabe469acdb35\",\"id_utilisateurs\":\"pwyh295\",\"detail\":\"Replanification par le mobile\",\"type\":\"replanification_mobile\",\"creation_date\":\"2016-03-19T06:59:44Z\",\"modification_date\":\"2016-03-19T06:59:44Z\",\"etag\":1}' \\\n  \"http://localhost:1337/prestations/v1/prestations_evenements/bamecu013EJZbOJIpe\"\n  ```\n",
+                "operationId": "patchPrestations_evenements",
+                "consumes": [
+                    "application/x-www-form-urlencoded"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ],
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "id",
+                        "description": "identifiant unique de la ressource prestations_evenements à mettre à jour (Ex: bamecu013EJZbOJIpe)",
+                        "required": true,
+                        "type": "string"
+                    },
+                    {
+                        "in": "body",
+                        "name": "body",
+                        "description": "ressource prestations_evenements",
+                        "required": false,
+                        "schema": {
+                            "$ref": "#/definitions/Prestations_evenements"
+                        }
+                    },
+                    {
+                        "in": "header",
+                        "name": "If-None-Match",
+                        "description": "Version de la ressource (voir etag) (Ex : 1)",
+                        "required": false,
+                        "type": "string"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "successful operation",
+                        "schema": {
+                            "$ref": "#/definitions/Prestations_evenements"
+                        }
+                    },
+                    "304": {
+                        "description": "not modified"
+                    },
+                    "400": {
+                        "description": "Bad request, parameters are not correct",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/Error"
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized, the authentification is invalid or missing"
+                    },
+                    "403": {
+                        "description": "Forbidden, permissions are insufficient"
+                    },
+                    "404": {
+                        "description": "Not found"
+                    },
+                    "412": {
+                        "description": "Precondition failed, versions conflit"
+                    },
+                    "429": {
+                        "description": "Too many requests"
+                    },
+                    "500": {
+                        "description": "Internal server error"
+                    },
+                    "503": {
+                        "description": "Temporary unavailable",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/Error"
+                            }
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "tags": [
+                    "prestations_evenements"
+                ],
+                "summary": "Supprime une ressourceprestations_evenements",
+                "description": "Supprime la ressource prestations_evenements `bamecu013EJZbOJIpe`\n\n\n  ```\n  curl -iX DELETE \\\n  -H 'Accept: application/json' \\\n  -H 'Authorization: eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJodHRwczovL2NsYXVkZS1pZHAubGFwb3N0ZS5mciIsInBybiI6ImNsYXVkZS5zZWd1cmV0QGxhcG9zdGUuZnIiLCJhdWQiOiJodHRwczovL2NsYXVkZS1hdXRoLmxhcG9zdGUuZnIiLCJleHAiOiIxNDYxNTYxNzIxIiwic2NvcGVzIjpbInJlc3NvdXJjZXMucmVhZCIsInJlc3NvdXJjZXMud3JpdGUiXX0.rn6BGkwXv1bqaevBuroqNoBDP6d8dNo3dN1f6kwPqNU' \\\n  \"http://localhost:1337/prestations/v1/prestations_evenements/bamecu013EJZbOJIpe\"\n  ```\n",
+                "operationId": "deleteOnePrestations_evenements",
+                "produces": [
+                    "application/json"
+                ],
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ],
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "id",
+                        "description": "identifiant unique de la ressource prestations_evenements à supprimer (Ex: bamecu013EJZbOJIpe)",
+                        "required": true,
+                        "type": "string"
+                    },
+                    {
+                        "in": "header",
+                        "name": "If-None-Match",
+                        "description": "Version de la ressource (voir etag) (Ex : 1)",
+                        "required": false,
+                        "type": "string"
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "Deleted"
+                    },
+                    "401": {
+                        "description": "Unauthorized, the authentification is invalid or missing"
+                    },
+                    "403": {
+                        "description": "Forbidden, permissions are insufficient"
+                    },
+                    "404": {
+                        "description": "Not found"
+                    },
+                    "429": {
+                        "description": "Too many requests"
+                    },
+                    "500": {
+                        "description": "Internal server error"
+                    },
+                    "503": {
+                        "description": "Temporary unavailable",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/Error"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/prestations_evenements/search": {
+            "get": {
+                "tags": [
+                    "prestations_evenements"
+                ],
+                "summary": "Fulltext search on all attribute of prestations_evenements",
+                "description": "\nSearch ressources prestations_evenements avec différents critères de recherche, pagination et des filtres sur les attributs.\n\nExemple avec des critères de pagination (count, start_index)\n\n\n  ```\n  curl -iX GET \\\n  -H 'Accept: application/json' \\\n  -H 'Authorization: eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJodHRwczovL2NsYXVkZS1pZHAubGFwb3N0ZS5mciIsInBybiI6ImNsYXVkZS5zZWd1cmV0QGxhcG9zdGUuZnIiLCJhdWQiOiJodHRwczovL2NsYXVkZS1hdXRoLmxhcG9zdGUuZnIiLCJleHAiOiIxNDYxNTYxNzIxIiwic2NvcGVzIjpbInJlc3NvdXJjZXMucmVhZCIsInJlc3NvdXJjZXMud3JpdGUiXX0.rn6BGkwXv1bqaevBuroqNoBDP6d8dNo3dN1f6kwPqNU' \\\n  \"http://localhost:1337/prestations/v1/prestations_evenements/search?q=v*&start_index=1&count=10\"\n  ```\n\nExemple avec des critères de date\n\n\n  ```\n  curl -iX GET \\\n  -H 'Accept: application/json' \\\n  -H 'Authorization: eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJodHRwczovL2NsYXVkZS1pZHAubGFwb3N0ZS5mciIsInBybiI6ImNsYXVkZS5zZWd1cmV0QGxhcG9zdGUuZnIiLCJhdWQiOiJodHRwczovL2NsYXVkZS1hdXRoLmxhcG9zdGUuZnIiLCJleHAiOiIxNDYxNTYxNzIxIiwic2NvcGVzIjpbInJlc3NvdXJjZXMucmVhZCIsInJlc3NvdXJjZXMud3JpdGUiXX0.rn6BGkwXv1bqaevBuroqNoBDP6d8dNo3dN1f6kwPqNU' \\\n  \"http://localhost:1337/prestations/v1/prestations_evenements/search?q=v*&creation_date_gte=2015-06-18T00:00:00Z\"\n  ```\n\nExemple avec des filtres sur les attributs retournés\n\n\n  ```\n  curl -iX GET \\\n  -H 'Accept: application/json' \\\n  -H 'Authorization: eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJodHRwczovL2NsYXVkZS1pZHAubGFwb3N0ZS5mciIsInBybiI6ImNsYXVkZS5zZWd1cmV0QGxhcG9zdGUuZnIiLCJhdWQiOiJodHRwczovL2NsYXVkZS1hdXRoLmxhcG9zdGUuZnIiLCJleHAiOiIxNDYxNTYxNzIxIiwic2NvcGVzIjpbInJlc3NvdXJjZXMucmVhZCIsInJlc3NvdXJjZXMud3JpdGUiXX0.rn6BGkwXv1bqaevBuroqNoBDP6d8dNo3dN1f6kwPqNU' \\\n  \"http://localhost:1337/prestations/v1/prestations_evenements/search?q=v*&creation_date_gte=2015-06-18T00:00:00Z&fields=id,modification_date\"\n  ```\n",
+                "operationId": "searchPrestations_evenements",
+                "produces": [
+                    "application/json"
+                ],
+                "parameters": [
+                    {
+                        "in": "query",
+                        "name": "q",
+                        "description": "champs de recherche fulltext\nEx ?q=recherh*\n",
+                        "required": false,
+                        "type": "string"
+                    },
+                    {
+                        "in": "query",
+                        "name": "fields",
+                        "description": "Listes des attributs à retourner (séparés par des virgules) Ex ?fields=id,creation_date\n",
+                        "required": false,
+                        "type": "string"
+                    },
+                    {
+                        "in": "query",
+                        "name": "start_index",
+                        "description": "Premier élément à retourner (commence à 1)",
+                        "default": 1,
+                        "required": false,
+                        "type": "integer",
+                        "format": "int64"
+                    },
+                    {
+                        "in": "query",
+                        "name": "count",
+                        "description": "Number of itemà récupérer (default 10, max 999)",
+                        "default": 20,
+                        "maximum": 999,
+                        "required": false,
+                        "type": "integer",
+                        "format": "int64"
+                    },
+                    {
+                        "in": "header",
+                        "name": "If-None-Match",
+                        "description": "Version de la ressource (voir etag) (Ex : 1)",
+                        "required": false,
+                        "type": "string"
+                    }
+                ],
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "successful operation",
+                        "schema": {
+                            "$ref": "#/definitions/PaginationPrestations_evenements"
+                        }
+                    },
+                    "304": {
+                        "description": "not modified"
+                    },
+                    "400": {
+                        "description": "Bad request, parameters are not correct",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/Error"
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized, the authentification is invalid or missing"
+                    },
+                    "403": {
+                        "description": "Forbidden, permissions are insufficient"
+                    },
+                    "429": {
+                        "description": "Too many requests"
+                    },
+                    "500": {
+                        "description": "Internal server error"
+                    },
+                    "503": {
+                        "description": "Temporary unavailable",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/Error"
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    },
+    "definitions": {
+        "PaginationPrestations": {
+            "description": "Pagination format",
+            "properties": {
+                "paginate": {
+                    "$ref": "#/definitions/PaginatePrestations"
+                },
+                "prestations": {
+                    "type": "array",
+                    "description": "Ressources List, empty if none",
+                    "items": {
+                        "$ref": "#/definitions/Prestations"
+                    }
+                }
+            }
+        },
+        "PaginatePrestations": {
+            "description": "Pagination links and number of items",
+            "properties": {
+                "next": {
+                    "type": "string",
+                    "description": "Link href to consult next page ex 'http://localhost:1337/prestations/v1/prestations?start_index=21&count=10'\n"
+                },
+                "prev": {
+                    "type": "string",
+                    "description": "Link to consult previous page\nex 'http://localhost:1337/prestations/v1/prestations?start_index=1&count=10'\n"
+                },
+                "total_results": {
+                    "type": "integer",
+                    "format": "int64",
+                    "description": "Total number of items (ex 27)"
+                }
+            }
+        },
+        "PaginationTournees": {
+            "description": "Pagination format",
+            "properties": {
+                "paginate": {
+                    "$ref": "#/definitions/PaginateTournees"
+                },
+                "prestations": {
+                    "type": "array",
+                    "description": "Ressources List, empty if none",
+                    "items": {
+                        "$ref": "#/definitions/Tournees"
+                    }
+                }
+            }
+        },
+        "PaginateTournees": {
+            "description": "Pagination links and number of items",
+            "properties": {
+                "next": {
+                    "type": "string",
+                    "description": "Link href to consult next page ex 'http://localhost:1337/prestations/v1/tournees?start_index=21&count=10'\n"
+                },
+                "prev": {
+                    "type": "string",
+                    "description": "Link to consult previous page\nex 'http://localhost:1337/prestations/v1/tournees?start_index=1&count=10'\n"
+                },
+                "total_results": {
+                    "type": "integer",
+                    "format": "int64",
+                    "description": "Total number of items (ex 27)"
+                }
+            }
+        },
+        "PaginationCampagnes": {
+            "description": "Pagination format",
+            "properties": {
+                "paginate": {
+                    "$ref": "#/definitions/PaginateCampagnes"
+                },
+                "prestations": {
+                    "type": "array",
+                    "description": "Ressources List, empty if none",
+                    "items": {
+                        "$ref": "#/definitions/Tournees"
+                    }
+                }
+            }
+        },
+        "PaginateCampagnes": {
+            "description": "Pagination links and number of items",
+            "properties": {
+                "next": {
+                    "type": "string",
+                    "description": "Link href to consult next page ex 'http://localhost:1337/prestations/v1/campagne?start_index=21&count=10'\n"
+                },
+                "prev": {
+                    "type": "string",
+                    "description": "Link to consult previous page\nex 'http://localhost:1337/prestations/v1/campagne?start_index=1&count=10'\n"
+                },
+                "total_results": {
+                    "type": "integer",
+                    "format": "int64",
+                    "description": "Total number of items (ex 27)"
+                }
+            }
+        },
+        "PaginationPrestations_evenements": {
+            "description": "Pagination format",
+            "properties": {
+                "paginate": {
+                    "$ref": "#/definitions/PaginatePrestations_evenements"
+                },
+                "prestations": {
+                    "type": "array",
+                    "description": "Ressources List, empty if none",
+                    "items": {
+                        "$ref": "#/definitions/Tournees"
+                    }
+                }
+            }
+        },
+        "PaginatePrestations_evenements": {
+            "description": "Pagination links and number of items",
+            "properties": {
+                "next": {
+                    "type": "string",
+                    "description": "Link href to consult next page ex 'http://localhost:1337/prestations/v1/prestations_evenements?start_index=21&count=10'\n"
+                },
+                "prev": {
+                    "type": "string",
+                    "description": "Link to consult previous page\nex 'http://localhost:1337/prestations/v1/prestations_evenements?start_index=1&count=10'\n"
+                },
+                "total_results": {
+                    "type": "integer",
+                    "format": "int64",
+                    "description": "Total number of items (ex 27)"
+                }
+            }
+        },
+        "Error": {
+            "description": "Error format",
+            "required": [
+                "error"
+            ],
+            "properties": {
+                "error_description": {
+                    "type": "string",
+                    "description": "long description error message (ex 'A user must have an email address')"
+                },
+                "error": {
+                    "type": "string",
+                    "description": "error name to describe the error, ex \"invalid_user\""
+                }
+            }
+        },
+        "Prestations": {
+            "description": "prestations format model",
+            "properties": {
+                "id": {
+                    "type": "string",
+                    "description": "identifiant unique de prestation référence interne poste",
+                    "example": "xafaro028EywThtEpe"
+                },
+                "id_agents": {
+                    "type": "string",
+                    "description": "identifiant de l'agent réalisant la prestation",
+                    "example": "pwyh254"
+                },
+                "id_campagnes": {
+                    "type": "string",
+                    "description": "identifiant de campagne à laquelle la prestation est rattachée",
+                    "example": "idca123456"
+                },
+                "id_tournees": {
+                    "type": "string",
+                    "description": "identifiant postal de tournée facteur",
+                    "example": "idtoac597bde356"
+                },
+                "id_commanditaires": {
+                    "type": "string",
+                    "description": "identifiant unique du commanditaire de la prestation (n° coclico?)",
+                    "example": 123456
+                },
+                "ref_commanditaire_prestations": {
+                    "type": "string",
+                    "description": "Référence unique connue du commanditaire de la prestation, cet identifiant permet au commanditaire de rapprocher les prestations réalisées avec son Système d'information et permet lors des imports de prestation de détecter les erreurs )",
+                    "example": "campagne123-client3456"
+                },
+                "type_prestation": {
+                    "type": "string",
+                    "description": "type de prestation (proxy-data, proxy-ami,....)",
+                    "example": "proxy-data"
+                },
+                "nom_destinataire": {
+                    "type": "string",
+                    "description": "Ligne d'adresse 1, nom, prénom, raison sociale du destinataire recevant la prestation",
+                    "example": "Alain Seguret"
+                },
+                "adresse_destinataire_ligne2": {
+                    "type": "string",
+                    "description": "ligne 2 d'adresse du destinataire, service, appartement, chez",
+                    "example": "chez Lionel André"
+                },
+                "adresse_destinataire_ligne3": {
+                    "type": "string",
+                    "description": "Ligne 3 d'adresse du destinataire, complément (Bâtiment - Immeuble...)",
+                    "example": "Les peupliers"
+                },
+                "adresse_destinataire_ligne4": {
+                    "type": "string",
+                    "description": "Ligne 4 d'adresse du destinataire, No et libellé de voie",
+                    "example": "21 rue du 19 janvier"
+                },
+                "adresse_destinataire_ligne5": {
+                    "type": "string",
+                    "description": "Ligne 5 d'adresse du destinataire, boite postale ou compléments commune",
+                    "example": "BP 521"
+                },
+                "adresse_destinataire_ligne6": {
+                    "type": "string",
+                    "description": "Ligne 6 d'adresse du destinataire, code Postal/CEDEX et localité",
+                    "example": "92380 Garches"
+                },
+                "adresse_destinataire_ligne7": {
+                    "type": "string",
+                    "description": "Ligne 7 d'adresse du destinataire, pays",
+                    "example": "France"
+                },
+                "geolocalisation": {
+                    "type": "string",
+                    "description": "si pas d'adresse ou en complément de l'adresse, géolocalisation au format WGS84 [-0.243148,44.945496]",
+                    "example": [
+                        -0.243148,
+                        44.945496
+                    ]
+                },
+                "statut_adresse": {
+                    "type": "string",
+                    "description": "statut de l’adresse (dépend du redressement d’adresse) (a_verifier,validee_corrigee,validee,invalide,inexistante,....)",
+                    "example": "validee"
+                },
+                "indication_acces_adresse": {
+                    "type": "string",
+                    "description": "digicode, moyen d'accès particulier",
+                    "example": "digicode 12345"
+                },
+                "information_complementaires": {
+                    "type": "string",
+                    "description": "informations complémentaires utiles pour le facteur",
+                    "example": "Chien méchant"
+                },
+                "date_debut_campagne": {
+                    "type": "string",
+                    "format": "date-time",
+                    "description": "date de début de campagne au format RFC3339 YYYY-MM-DDTHH:NN:SSZ",
+                    "example": "2014-06-18T23:59:58.000Z"
+                },
+                "date_fin_campagne": {
+                    "type": "string",
+                    "description": "date de fin de campagne au format RFC3339 YYYY-MM-DDTHH:NN:SSZ, il n'est pas possible de replanifier la prestation après cette date",
+                    "example": "2014-07-01T23:59:59.000Z"
+                },
+                "date_planification": {
+                    "type": "string",
+                    "format": "date-time",
+                    "description": "date de planification de campagne au format RFC33369 2016-06-20T23:59:59Z (ce champ peut être modifié par le mobile)",
+                    "example": "2014-06-18T23:59:58.000Z"
+                },
+                "date_premier_passage": {
+                    "type": "string",
+                    "format": "date-time",
+                    "description": "date à laquelle la prestation a été réalisée (ok ou ko) pour la première fois",
+                    "example": "2014-06-18T23:59:58.000Z"
+                },
+                "date_realisation": {
+                    "type": "string",
+                    "format": "date-time",
+                    "description": "date à laquelle la prestation a été réalisée pour la dernière fois au format RFC3339 YYYY-MM-DDTHH:NN:SSZ (ce champ est renseigné par le mobile)",
+                    "example": "2014-06-18T23:59:58.000Z"
+                },
+                "date_replanification": {
+                    "type": "string",
+                    "format": "date-time",
+                    "description": "date à laquelle la prestation a été replanifiée   (ce champ est renseigné par le mobile)",
+                    "example": "2014-06-18T23:59:58.000Z"
+                },
+                "nom_tournee": {
+                    "type": "string",
+                    "description": "todo describe",
+                    "example": "TP-0001"
+                },
+                "statut_prestation": {
+                    "type": "string",
+                    "description": "Statut de la prestation, (a_faire,fait_ok,fait_ko, refus_destinataire, annulee, avis_de_passage_depose,adresse_invalide….) (ce champ est renseigné par le mobile)",
+                    "example": "a_faire"
+                },
+                "complement_statut": {
+                    "type": "string",
+                    "description": "anomalie, ou complément d'information, (client_absent, adresse_erronee,...)  (ce champ est renseigné par le mobile)",
+                    "example": "client_absent"
+                },
+                "commentaire_libre": {
+                    "type": "string",
+                    "description": "champs libre facteur permettant de diagnostiquer des problèmes ou échanger avec le service client (ce champ est renseigné par le mobile et réservé à la poste)",
+                    "example": "Le client a demandé des informations complementaires, il est interessé par d'autres produits"
+                },
+                "reponse": {
+                    "type": "string",
+                    "description": "Contenu des réponses de la prestation (format propre au client),  (format csv/json à valider par IBM)  (ce champ est renseigné par le mobile)",
+                    "example": "Q1:oui;q2:non"
+                },
+                "creation_date": {
+                    "type": "string",
+                    "format": "date-time",
+                    "description": "date de création de la ressource dans le système( permet de faire des recherches/export/synchronisation via la date au format RFC3339 YYYY-MM-DDTHH:NN:SSZ)",
+                    "example": "2014-06-18T23:59:58.000Z"
+                },
+                "modification_date": {
+                    "type": "string",
+                    "format": "date-time",
+                    "description": "date de modification de la ressource prestation dans le système (permet de faire des recherches/export/sunchronisations via la date au format RFC3339 YYYY-MM-DDTHH:NN:SSZ)",
+                    "example": "2014-06-18T23:59:58.000Z"
+                }
+            }
+        },
+        "Campagnes": {
+            "description": "Modèle de campagne de prestations",
+            "properties": {
+                "id": {
+                    "type": "string",
+                    "description": "identifiant unique de campagne (référence interne poste)",
+                    "example": "tizoli005E14FGyLTx"
+                },
+                "id_commanditaires": {
+                    "type": "string",
+                    "description": "identifiant du commanditaire de la campagne (no coclico? Ex 567876)",
+                    "example": 123456
+                },
+                "id_utilisateurs": {
+                    "type": "string",
+                    "description": "identifiant de l'utilisateur ayant créé la campagne (utilisateur avec code RH ou non?)",
+                    "example": "pwyh295"
+                },
+                "titre": {
+                    "type": "string",
+                    "description": "Nom court de la campagne Ex \"Carrefour promo hiver\"",
+                    "example": "Petit dejeuner Carrefour"
+                },
+                "date_debut_campagne": {
+                    "type": "string",
+                    "format": "date-time",
+                    "description": "date de début de la campagne (au format RFC3339 YYYY-MM-DDTHH:NN:SSZ)",
+                    "example": "2014-06-18T23:59:58.000Z"
+                },
+                "date_fin_campagne": {
+                    "type": "string",
+                    "description": "date de fin de la campagne (au format RFC3339 YYYY-MM-DDTHH:NN:SSZ)",
+                    "example": "2016-08-18T23:59:59.000Z"
+                },
+                "statut_campagne": {
+                    "type": "string",
+                    "description": "statut de la campagne  terminee, a_faire, a_planifiee, a_valider",
+                    "example": "lancee"
+                },
+                "description": {
+                    "type": "string",
+                    "description": "Description de la campagne au format markdown (à valider par IBM)",
+                    "example": "Questionnnaire petit déjeuner"
+                },
+                "discours_agent": {
+                    "type": "string",
+                    "description": "message pour le discours de l'agent au format markdown (à valider par IBM)",
+                    "example": "bonjour, voulez-vous participez à une enquête BVA"
+                },
+                "aide": {
+                    "type": "string",
+                    "description": "aide textuelle pour l'agent au format markdown (à valider par IBM)",
+                    "example": "10 minutes seulement suffisent pour ce questionnaire"
+                },
+                "questions": {
+                    "type": "string",
+                    "description": "todo describe",
+                    "example": "format Q/R IBM"
+                },
+                "creation_date": {
+                    "type": "string",
+                    "format": "date-time",
+                    "description": "date de création de la ressource dans le système( permet de faire des recherches/export/synchronisation via la date au format RFC3339 YYYY-MM-DDTHH:NN:SSZ)",
+                    "example": "2014-06-18T23:59:58.000Z"
+                },
+                "modification_date": {
+                    "type": "string",
+                    "format": "date-time",
+                    "description": "date de modification de la ressource dans le système( permet de faire des recherches/export/synchronisation via la date au format RFC3339 YYYY-MM-DDTHH:NN:SSZ)",
+                    "example": "2014-06-18T23:59:58.000Z"
+                }
+            }
+        },
+        "Tournees": {
+            "description": "Modele de ressource tournées",
+            "properties": {
+                "id": {
+                    "type": "string",
+                    "description": "identifiant unique de la tournée",
+                    "example": "idtou0594JZbhkITl"
+                },
+                "date_tournee": {
+                    "type": "string",
+                    "format": "date-time",
+                    "description": "date de la tournée (au format RFC3339 YYYY-MM-DDTHH:NN:SSZ)",
+                    "example": "2014-06-18T23:59:58.000Z"
+                },
+                "id_agents": {
+                    "type": "string",
+                    "description": "identifiant de l'agent réalisant la prestation",
+                    "example": "pwyh254"
+                },
+                "id_sites": {
+                    "type": "string",
+                    "description": "identifiant du site réalisant la prestation",
+                    "example": 787120
+                },
+                "nom_tournee": {
+                    "type": "string",
+                    "description": "nom de la tournée pour affichage sur le mobile (si utile)",
+                    "example": "TP-0001"
+                },
+                "statut_tournee": {
+                    "type": "string",
+                    "description": "statut de la tournée (ex a_faire, realisee,...)",
+                    "example": "a_faire"
+                },
+                "creation_date": {
+                    "type": "string",
+                    "format": "date-time",
+                    "description": "date de création de la ressource dans le système (permet de faire des recherches/export/synchronisation via la date au format RFC3339 YYYY-MM-DDTHH:NN:SSZ)",
+                    "example": "2014-06-18T23:59:58.000Z"
+                },
+                "modification_date": {
+                    "type": "string",
+                    "format": "date-time",
+                    "description": "date de modification de la ressource dans le système (permet de faire des recherches/export/synchronisation via la date au format RFC3339 YYYY-MM-DDTHH:NN:SSZ)",
+                    "example": "2014-06-18T23:59:58.000Z"
+                }
+            }
+        },
+        "Prestations_evenements": {
+            "description": "prestations_evenements modèle",
+            "properties": {
+                "id": {
+                    "type": "string",
+                    "description": "identifiant unique de la ressource",
+                    "example": "bamecu013EJZbOJIpe"
+                },
+                "id_prestations": {
+                    "type": "string",
+                    "description": "identifiant de la prestation auxquelle est rattachée l’évenement",
+                    "example": "idprabe469acdb35"
+                },
+                "id_utilisateurs": {
+                    "type": "string",
+                    "description": "identifiant de l'agent ayant réalisé l'évenement",
+                    "example": "pwyh295"
+                },
+                "detail": {
+                    "type": "string",
+                    "description": "Message textuel permettant d'identifier l'évènement",
+                    "example": "Replanification par le mobile"
+                },
+                "type": {
+                    "type": "string",
+                    "description": "type d’évenement (permet de faire des statistiques sur le type d’évenement) ex replanification_mobile, replanification_service_client…",
+                    "example": "replanification_mobile"
+                },
+                "creation_date": {
+                    "type": "string",
+                    "format": "date-time",
+                    "description": "date de création de la ressource dans le système( permet de faire des recherches/export/synchronisation via la date au format RFC3339 YYYY-MM-DDTHH:NN:SSZ)",
+                    "example": "2014-06-18T23:59:58.000Z"
+                },
+                "modification_date": {
+                    "type": "string",
+                    "format": "date-time",
+                    "description": "date de modification de la ressource dans le système( permet de faire des recherches/export/synchronisation via la date au format RFC3339 YYYY-MM-DDTHH:NN:SSZ)",
+                    "example": "2014-06-18T23:59:58.000Z"
+                }
+            }
+        }
+    }
+}
